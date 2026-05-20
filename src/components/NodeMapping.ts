@@ -6,17 +6,18 @@ export class NodeMappingManager {
     private mappings: Map<string, NodeMappingInfo> = new Map();
     private lineMap: LineNodeMap = {};
     private contentLines: string[] = [];
+    private normalizedLines: string[] = [];
+
+    private lastFoundLine = -1;
 
     buildMappings(root: IPureNode, markdown: string): void {
         this.mappings.clear();
         this.lineMap = {};
         this.contentLines = markdown.split('\n');
+        this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
+        this.lastFoundLine = -1;
 
-        if (root.children) {
-            for (const node of root.children) {
-                this.processNode(node, 0, undefined);
-            }
-        }
+        this.processNode(root, 0, undefined);
     }
 
     public extractTextContent(content: string): string {
@@ -45,12 +46,14 @@ export class NodeMappingManager {
 
     updateContent(markdown: string): void {
         this.contentLines = markdown.split('\n');
+        this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
     }
 
     clear(): void {
         this.mappings.clear();
         this.lineMap = {};
         this.contentLines = [];
+        this.normalizedLines = [];
     }
 
     findNearestNode(line: number): NodeMappingInfo | undefined {
@@ -74,11 +77,13 @@ export class NodeMappingManager {
         return this.getAllMappings().filter(m => m.parentId === nodeId);
     }
 
+    // the purpose is just mapping the node to the line, so we can find the node by line number when we click on the line, and find the line number by node when we click on the node;
     private processNode(node: IPureNode, depth: number, parentId?: string): void {
         const content = this.extractTextContent(node.content);
-        const startLine = this.findLineByContent(content);
-
-        if (startLine === -1) return;
+        let startLine = this.findLineByContent(content, this.lastFoundLine + 1);
+        console.info('from lastFoundLine',this.lastFoundLine+1,'\nreturned lastFoundLine:',startLine,'\ncontent:',content,'\nnormalines:',this.normalizedLines)
+        //if (startLine === -1) return;//if (node.payload?.nodeId=="filenode"){startLine=0;}else
+        this.lastFoundLine = startLine;
 
         const endLine = this.findNodeEndLine(startLine, depth);
         // Use renderer-assigned nodeId from node.payload if available, otherwise fall back
@@ -100,32 +105,48 @@ export class NodeMappingManager {
         }
         this.lineMap[startLine].push(nodeId);
 
-        if (node.children) {
+        if (node.children) { // when a specific node's position changed, its children have to be changed;
             for (const child of node.children) {
                 this.processNode(child, depth + 1, nodeId);
             }
         }
     }
 
-    private findLineByContent(content: string): number {
-        content = this.extractTextContent(content);
-        const normalizedContent = content.trim().toLowerCase();
+    public findLineByContent(content: string, startIndex: number = 0): number {
+        const normalizedContent = this.normalizeLine(content);
 
-        for (let i = 0; i < this.contentLines.length; i++) {
-            const line = this.contentLines[i];
-            const normalizedLine = line
-                .replace(/^#{1,6}\s*/, '')
-                .replace(/^\s*[-*+]\s*/, '')
-                .replace(/^\s*\d+\.\s*/, '')
-                .trim()
-                .toLowerCase();
-
-            if (normalizedLine === normalizedContent) {
+        // Exact match
+        for (let i = startIndex; i < this.normalizedLines.length; i++) {
+            if (this.normalizedLines[i] === normalizedContent) {
                 return i;
-            }
+            } else console.log(`Line ${i} does not match. Expected: "${normalizedContent}", Actual: "${this.normalizedLines[i]}"`);
         }
 
+        // Partial match fallback if exact match fails
+     /*   for (let i = startIndex; i < this.normalizedLines.length; i++) {
+            if (this.normalizedLines[i].includes(normalizedContent) || normalizedContent.includes(this.normalizedLines[i])) {
+                if (this.normalizedLines[i].length > 0 && normalizedContent.length > 0) {
+                    return i;
+                }
+            }
+        }*/
         return -1;
+    }
+
+    private normalizeLine(line: string): string {
+        return line
+            .replace(/^#{1,6}\s*/, '')
+            .replace(/^\s*[-*+]\s*/, '')
+            .replace(/^\s*\d+\.\s*/, '')
+            .replace(/(\*\*|__)(.*?)\1/g, '$2') // Bold
+            .replace(/(\*|_)(.*?)\1/g, '$2')   // Italic
+            .replace(/~~(.*?)~~/g, '$1')       // Strikethrough
+            .replace(/==(.*?)==/g, '$1')       // Highlight
+            .replace(/`([^`]+)`/g, '$1')       // Inline code
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links [text](url)
+            .replace(/[\\`*_{}[\]()#+\-.!]/g, '') // Remove remaining markdown special chars
+            .trim()
+            .toLowerCase();
     }
 
     private findNodeEndLine(startLine: number, depth: number): number {

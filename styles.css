@@ -77,7 +77,7 @@
 .markmap-node-highlighted .markmap-foreign,
 .markmap-node-highlighted .markmap-foreign div {
     cursor: pointer;
-    color: var(--background-primary) !important;
+    color: white !important;
 }
 
 .markmap-node-highlighted foreignObject {
@@ -95,13 +95,13 @@
 .markmap-node-selected .markmap-foreign,
 .markmap-node-selected .markmap-foreign div {
     cursor: pointer;
-    background: var(--text-highlight-bg,) !important;
-    border-radius: 2px;
+    background: rgb(38 86 111 / 40%) !important;
+    border-radius: 4px;
 }
 
 .markmap-node-selected foreignObject {
-    outline: 2px solid var(--text-highlight-bg) !important;
-    outline-offset: 2px;
+    outline: 2px solid rgb(255 30 0 / 40%) !important;
+    outline-offset: 1px;
     border-radius: 4px;
 }
 
@@ -116,30 +116,91 @@
     stroke-dasharray: 4;
 }
 
-/* Inline Editor - floating HTML overlay over SVG container */
+/* Inline Editor - Tech Visualization Effect */
 .markmap-inline-editor {
     position: absolute;
     z-index: 100;
-    min-width: 150px;
-    max-width: 400px;
+    min-width: 10rem;
+    max-width: 20rem;
+    height: 2.5rem;
     pointer-events: auto;
+
+    /* Intelligent Tech Glassmorphism */
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:2px 3px 3px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgb(100,150,200);
+    transform-origin: center center;
+    /*filter: drop-shadow(0 0 8px rgb(80, 150, 210));*/
+    overflow: hidden;
 }
 
 .markmap-inline-editor input {
     width: 100%;
-    padding: 6px 10px;
-    border: 2px solid var(--interactive-accent);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
-    font-size: 14px;
+    height: 100%;
+    border: none;
+    border-radius: 16px;
+    background: transparent;
     outline: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
 }
 
 .markmap-inline-editor input:focus {
-    border-color: var(--interactive-accent-hover);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    text-shadow: unset;
+}
+
+/* Cybernetic Scanning Line Effect */
+.markmap-inline-editor::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    background: rgba(155, 154, 252, 0.2);
+    box-shadow: 0 0 10px var(--interactive-accent), 0 0 20px var(--interactive-accent);
+    /*animation: markmap-scan-line 2s linear infinite;*/
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.2;
+}
+
+@keyframes markmap-editor-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+        filter: drop-shadow(0 0 0px var(--interactive-accent));
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+        filter: drop-shadow(0 0 12px var(--interactive-accent));
+    }
+}
+
+@keyframes markmap-scan-line {
+    0% {
+        opacity: 0;
+        transform: scaleY(0);
+    }
+
+    10% {
+        opacity: 0.2;
+        transform: scaleY(1);
+    }
+
+    90% {
+        opacity: 0.2;
+        transform: scaleY(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scaleY(0);
+    }
 }
 
 /* Loading State */
@@ -195,9 +256,12 @@
 }
 
 @keyframes markmap-sync-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0.5;
     }
+
     50% {
         opacity: 1;
     }
@@ -256,7 +320,7 @@
     cursor: pointer;
 }
 
-.markmap-foreign > div {
+.markmap-foreign>div {
     max-width: max-content;
 }
 
@@ -327,6 +391,7 @@
         opacity: 0;
         transform: scale(0.8);
     }
+
     to {
         opacity: 1;
         transform: scale(1);
@@ -338,6 +403,7 @@
         opacity: 1;
         transform: scale(1);
     }
+
     to {
         opacity: 0;
         transform: scale(0.8);

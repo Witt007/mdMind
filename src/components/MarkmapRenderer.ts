@@ -1,9 +1,12 @@
 import {ITransformResult, Transformer} from 'markmap-lib';
-import {IPureNode} from 'markmap-common';
+import {IPureNode, INode} from 'markmap-common';
 import {Markmap} from 'markmap-view';
 import {MarkmapSettings} from '../types';
 import {CSS_CLASSES, MARKMAP_COLORS} from '../constants';
+import {BaseType, Transition} from "d3";
+import {extendedSvgGEle} from "../views/MarkmapView";
 
+export type operationType="insert-child" | "insert-sibling" | "change-current" | "delete-current" | "none"
 export interface MarkmapRendererOptions {
     onNodeClick?: (node: IPureNode, event: MouseEvent) => void;
     onNodeDblClick?: (node: IPureNode, event: KeyboardEvent | MouseEvent) => void;
@@ -27,17 +30,24 @@ export class MarkmapRenderer {
     private pendingClickNode: IPureNode | null = null;
     private pendingClickEvent: MouseEvent | null = null;
     private focusedNode: IPureNode | null = null;
+    private isZoomedIn = false;
+    private zoomLocked = false;
 
     constructor(
         container: HTMLElement,
         settings: MarkmapSettings,
         options: MarkmapRendererOptions = {}
     ) {
+        this.resetMarkmapTransition();
         this.container = container;
         this.settings = settings;
         this.options = options;
         this.transformer = new Transformer();
         this.init();
+    }
+
+    getSvg():SVGElement|null{
+        return this.svg;
     }
 
     assignNodeIds(): void {
@@ -60,16 +70,16 @@ export class MarkmapRenderer {
         walk(this.currentRoot);
 
         // Assign data-node-id to SVG DOM elements using D3 bound data
-        requestAnimationFrame(() => {
-            if (!this.svg) return;
-            const domNodes = this.svg.querySelectorAll('.markmap-node');
-            domNodes.forEach((el) => {
-                const nodeData = (el as any).__data__ as IPureNode | undefined;
-                if (nodeData && (nodeData.payload as any)?.nodeId) {
-                    (el as HTMLElement).dataset.nodeId = (nodeData.payload as any).nodeId;
-                }
-            });
-        });
+        // requestAnimationFrame(() => {   });
+        /*      if (!this.svg) return;
+              const domNodes = this.svg.querySelectorAll('.markmap-node');
+              domNodes.forEach((el) => {
+                  const nodeData = (el as any).__data__ as IPureNode | undefined;
+                  if (nodeData && (nodeData.payload as any)?.nodeId) {
+                      (el as HTMLElement).dataset.nodeId = (nodeData.payload as any).nodeId;
+                  }
+              });*/
+
     }
 
     getNodeByNodeId(nodeId: string): IPureNode | null {
@@ -80,36 +90,113 @@ export class MarkmapRenderer {
         return this.findNodeByElement(element);
     }
 
-    render(markdown: string): ITransformResult | null {
+    transitionTime = 0
+
+    setOntransitionend(callack: () => void,selectedSvgNode:extendedSvgGEle,operationType:typeof this.operationType) {
+        if (!this.markmap) return;
+        console.log('setOntransitionen called at ',new Date().toString());
+        this.ontransitionend = callack;
+        this.selectedSvgNode =selectedSvgNode ;
+        this.operationType=operationType;
+    }
+
+    ontransitionend: () => void = () => {
+    }
+
+    private selectedSvgNode: extendedSvgGEle | null = null;
+    private operationType:operationType  = "none";
+
+    private resetMarkmapTransition(){
+        const self = this;
+        Markmap.prototype.transition = function (t) {
+            let {duration: r} = this.options;
+            const transition = t.transition().duration(r);
+            transition.on('end',function (datum, index, groups) {
+                const mnode=datum as IPureNode
+
+
+                let currentNode: any = self.selectedSvgNode;
+                if (self.operationType == 'insert-sibling') currentNode = self.selectedSvgNode?.nextElementSibling;
+                else if (self.operationType == 'insert-child') currentNode = self.selectedSvgNode?.previousElementSibling;
+                else if (self.operationType == 'delete-current') (() => {
+                    let prevNode = self.selectedSvgNode?.previousElementSibling as SVGSVGElement;
+                    if (!prevNode) return;
+                    let currDepth = self.selectedSvgNode?.dataset.depth;
+                    let isFound = false;
+                    while (!isFound) {
+                        if (prevNode && prevNode.dataset?.depth === currDepth) {
+                            isFound = true;
+                            currentNode = prevNode;
+                        }
+                        prevNode = prevNode?.previousElementSibling as SVGSVGElement;
+                    }
+                })()
+
+                const selectednodeid=currentNode?.__data__?.payload?.nodeId
+                const foreignObj=Array.from(groups).find(g=>(<SVGForeignObjectElement>g)?.nodeName==='foreignObject') as extendedSvgGEle|undefined;
+                const isChangeCurrent=self.operationType=='change-current'?mnode?.content!==currentNode?.__data__?.content:mnode?.content===currentNode?.__data__?.content;
+                //make sure it only is invoked once
+                if (foreignObj) {
+                    console.log(datum, '\n', groups, '\n', index);
+                    if (self.operationType=='none'||(mnode?.payload?.nodeId===selectednodeid&&
+                        isChangeCurrent)) {
+                        self.ontransitionend();
+                        self.selectedSvgNode=null;
+                        self.ontransitionend=()=>{};
+                    }
+                }
+            });
+            return transition;
+        }
+    }
+    async render(markdown: string, filename?: string): Promise<ITransformResult | null> {
         try {
             const result = this.transformer.transform(markdown);
-            this.currentRoot = result.root;
+
+            let rootNode: IPureNode = result.root;
+            /*   if (filename) {
+                   rootNode = {
+                       content: filename,
+                       children: result.root.children||[], payload:{nodeId:'filenode'}
+                   } as typeof result.root;
+               }*/
+
+            this.currentRoot = rootNode;
 
             if (this.markmap) {
-                this.markmap.setData(result.root);
-                this.assignNodeIds();
-                this.markmap.fit();
+                 this.assignNodeIds();
+                 this.markmap.setData(rootNode);
+                //this.markmap.fit();
             } else {
-                this.markmap = Markmap.create(this.svg!, {
-                    /* autoFit: true,
-                    fitRatio: 0.8,
+
+                 this.assignNodeIds();
+
+                this.markmap =  Markmap.create(this.svg!, {
+                    /*autoFit: true,
+                   fitRatio: 0.8,*/
                     duration: 400,
-                    nodeMinHeight: 24,
-                    spacingVertical: 12,
-                    spacingHorizontal: 48,
-                    paddingX: 12,
-                    color: this.getColorFn(), */
-                }, result.root);
+                    /* nodeMinHeight: 24,
+                     spacingVertical: 12,
+                     spacingHorizontal: 48,
+                     paddingX: 12,*/
+                    color: this.getColorFn(),
+                }, rootNode);
 
-                this.assignNodeIds();
-
+                this.transitionTime = this.markmap.options.duration
                 // Setup pan/zoom after Markmap is created (Bug 3 fix)
                 if (this.settings.panZoom) {
                     this.setupPanZoom();
                 }
             }
-
-            return result;
+            /*    const waitTime = this.markmap.options.duration || 500;
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        // requestAnimationFrame ensures the browser has painted the final state
+                        window.requestAnimationFrame(()=>(resolve({ ...result, root: rootNode })));
+                    }, waitTime);
+                });*/
+            //this.svg?.focus({preventScroll: true});
+            return {...result, root: rootNode};
         } catch (error) {
             console.error('Failed to render markmap:', error);
             return null;
@@ -170,31 +257,45 @@ export class MarkmapRenderer {
 
     fit(): void {
         if (this.markmap) {
+            this.isZoomedIn = false;
             this.markmap.fit();
         }
     }
 
-    zoomIn(): void {
-        if (this.markmap) {
-            void this.markmap.rescale(1.2);
+    zoomIn(): Promise<void> {
+        if (this.markmap && !this.isZoomedIn) {
+            this.isZoomedIn = true;
+            return this.markmap.rescale(1.3);
         }
+        return Promise.resolve();
     }
 
     zoomOut(): void {
         if (this.markmap) {
+            this.isZoomedIn = false;
             void this.markmap.rescale(0.8);
         }
     }
 
-    resetZoom(): void {
+    resetZoom(): Promise<void> {
         if (this.markmap) {
-            void this.markmap.rescale(1).then(() => this.markmap!.fit());
+            this.isZoomedIn = false;
+            return this.markmap.rescale(1);//.then(() => this.markmap!.fit());
         }
+        return Promise.resolve();
     }
 
-    focusNode(node: IPureNode): void {
-        if (!this.markmap) return;
-        void this.markmap.centerNode(node as any);
+    lockZoom(): void {
+        this.zoomLocked = true;
+    }
+
+    unlockZoom(): void {
+        this.zoomLocked = false;
+    }
+
+    focusNode(node: IPureNode): Promise<void> {
+        if (!this.markmap) return Promise.resolve();
+        return this.markmap.centerNode(node as any);
     }
 
     destroy(): void {
@@ -263,14 +364,16 @@ export class MarkmapRenderer {
     private setupPanZoom(): void {
         if (!this.svg || !this.markmap) return;
 
-        // markmap-view uses d3-zoom internally; we only need to handle wheel zoom
-        this.svg.addEventListener('wheel', (e) => {
+        // Use capture phase so this fires before d3-zoom's target-phase listener,
+        // which calls stopImmediatePropagation() and would otherwise swallow the event.
+        // stopPropagation() here prevents d3-zoom from also zooming.
+        this.container.addEventListener('wheel', (e) => {
             e.preventDefault();
-            if (!this.markmap) return;
+            if (!this.markmap || this.zoomLocked) e.stopPropagation();
 
-            const scale = e.deltaY > 0 ? 0.9 : 1.1;
-            void this.markmap.rescale(scale);
-        }, {passive: false});
+            /*const scale = e.deltaY > 0 ? 0.9 : 1.1;
+            void this.markmap.rescale(scale);*/
+        }, {capture: true, passive: false});
     }
 
     private findNodeElementFromEvent(e: MouseEvent): Element | null {
@@ -290,42 +393,25 @@ export class MarkmapRenderer {
         return null;
     }
 
+    public getNodeFromMouseEvt(e: MouseEvent) {
+
+        const nodeEl = this.findNodeElementFromEvent(e);
+        if (nodeEl) {
+            return this.findNodeByElement(nodeEl);
+        }
+        return;
+    }
+
     private setupInteractions(): void {
         if (!this.svg) return;
 
-        this.svg.addEventListener('click', (e) => {
-            const nodeEl = this.findNodeElementFromEvent(e);
-            if (nodeEl) {
-                const node = this.findNodeByElement(nodeEl);
-                if (node) {
-                    this.focusedNode = node;
-                    this.svg?.focus({preventScroll: true});
-                    if (this.clickTimer) {
-                        clearTimeout(this.clickTimer);
-                        this.clickTimer = null;
-                    }
-                    this.pendingClickNode = node;
-                    this.pendingClickEvent = e;
-                    this.clickTimer = setTimeout(() => {
-                        if (this.pendingClickNode && this.options.onNodeClick) {
-                            this.options.onNodeClick(this.pendingClickNode, this.pendingClickEvent!);
-                            this.focusNode(this.pendingClickNode);
-                        }
-                        this.clickTimer = null;
-                        this.pendingClickNode = null;
-                        this.pendingClickEvent = null;
-                    }, 250);
-                }
-            }
-        });
-
-        this.svg.addEventListener('keydown', (e) => {
-            //@ts-ignore
-            if (e.currentTarget?.nodeName.toLowerCase() === "svg" && e.key === ' ' && this.focusedNode && this.options.onNodeDblClick) {
-                e.preventDefault();
-                this.options.onNodeDblClick(this.focusedNode, e);
-            }
-        });
+        /*      this.svg.addEventListener('keydown', (e) => {
+                  //@ts-ignore
+                  if (e.currentTarget?.nodeName.toLowerCase() === "svg" && e.key === ' ' && this.focusedNode && this.options.onNodeDblClick) {
+                      e.preventDefault();
+                      this.options.onNodeDblClick(this.focusedNode, e);
+                  }
+              });*/
 
         this.svg.addEventListener('contextmenu', (e) => {
             const nodeEl = this.findNodeElementFromEvent(e);
