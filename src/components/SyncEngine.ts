@@ -77,15 +77,15 @@ export class SyncEngine {
             this.syncState.source = null;
         }
     }
-
+// the entrance of writing data from markmap to markdown
     async markmapToMarkdown(
         editor: Editor,
         node: IPureNode,
         operation: 'edit' | 'move' | 'delete' | 'indent' | 'outdent' | 'insert-sibling' | 'insert-child',
         params?: unknown
-    ): Promise<boolean> {
+    ): Promise<{ success: boolean; line?: number }> {
         if (this.syncState.isSyncing && this.syncState.source === 'editor') {
-            return false;
+            return { success: false };
         }
 
         this.syncState = {
@@ -102,21 +102,30 @@ export class SyncEngine {
             const edits = this.generateEdits(editor, node, operation, params);
 
             if (edits.length === 0) {
-                return false;
+                return { success: false };
             }
 
             await this.applyEdits(editor, edits);
+
 
             if (this.options.onSyncComplete) {
                 this.options.onSyncComplete('markmap-to-markdown');
             }
 
-            return true;
+            let line: number | undefined;
+            if (operation === 'insert-sibling' || operation === 'insert-child') {
+                line = edits[0].fromLine;
+                if (edits[0].newText.startsWith('\n')) {
+                    line += 1;
+                }
+            }
+
+            return { success: true, line };
         } catch (error) {
             if (this.options.onSyncError) {
                 this.options.onSyncError(error as Error);
             }
-            return false;
+            return { success: false };
         } finally {
             this.syncState.isSyncing = false;
             this.syncState.source = null;
@@ -157,9 +166,23 @@ export class SyncEngine {
     ): MarkdownEdit[] {
         const content = editor.getValue();
         const lines = content.split('\n');
-        const nodeContent = typeof node.content === 'string' ? node.content : '';
 
-        const targetLine = this.findLineByContent(lines, nodeContent);
+        const nodeId = (node.payload as any)?.nodeId;
+        let targetLine = -1;
+
+        if (nodeId) {
+            const mapping = this.mappingManager.getMappingById(nodeId);
+            if (mapping) {
+                targetLine = mapping.startLine;
+            }
+        }
+
+        if (targetLine === -1) {
+            this.mappingManager.updateContent(content);
+            const nodeContent = typeof node.content === 'string' ? node.content : '';
+            targetLine = this.mappingManager.findLineByContent(this.mappingManager.extractTextContent(nodeContent));
+        }
+
         if (targetLine === -1) return [];
 
         switch (operation) {
@@ -214,8 +237,20 @@ export class SyncEngine {
     }
 
     private generateDeleteEdits(lines: string[], startLine: number): MarkdownEdit[] {
-        const itemLines = extractListItemWithChildren(lines, startLine);
-        const endLine = startLine + itemLines.length - 1;
+        const baseLevel = getHeadingLevel(lines[startLine]);
+        let endLine: number;
+
+        if (baseLevel > 0) {
+            endLine = startLine;
+            for (let i = startLine + 1; i < lines.length; i++) {
+                const level = getHeadingLevel(lines[i]);
+                if (level > 0 && level <= baseLevel) break;
+                endLine = i;
+            }
+        } else {
+            const itemLines = extractListItemWithChildren(lines, startLine);
+            endLine = startLine + itemLines.length - 1;
+        }
 
         return [{
             fromLine: startLine,
@@ -309,9 +344,12 @@ export class SyncEngine {
         let newLine: string;
 
         if (headingLevel > 0) {
-            const childLevel = Math.min(6, headingLevel + 1);
             const endLine = this.findNodeEndLine(lines, targetLine, headingLevel);
-            newLine = `${'#'.repeat(childLevel)} New Node`;
+            if (headingLevel >= 6) {
+                newLine = '- New Node';
+            } else {
+                newLine = `${'#'.repeat(headingLevel + 1)} New Node`;
+            }
             return [{
                 fromLine: endLine,
                 fromCh: lines[endLine]?.length ?? 0,
@@ -370,29 +408,13 @@ export class SyncEngine {
         for (const edit of edits) {
             const from = {line: edit.fromLine, ch: edit.fromCh || 0};
             const to = {line: edit.toLine, ch: edit.toCh ?? editor.getLine(edit.toLine).length};
+            console.log('start line at',from.line,';end line at',to.line);
 
             doc.replaceRange(edit.newText, from, to);
         }
     }
 
     private findLineByContent(lines: string[], content: string): number {
-        content = this.mappingManager.extractTextContent(content);
-        const normalizedContent = content.trim().toLowerCase();
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const normalizedLine = line
-                .replace(/^#{1,6}\s*/, '')
-                .replace(/^\s*[-*+]\s*/, '')
-                .replace(/^\s*\d+\.\s*/, '')
-                .trim()
-                .toLowerCase();
-
-            if (normalizedLine === normalizedContent) {
-                return i;
-            }
-        }
-
-        return -1;
+        return this.mappingManager.findLineByContent(content, 0);
     }
 }

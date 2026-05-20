@@ -137,6 +137,11 @@ export function extractListItemWithChildren(lines: string[], startLine: number):
             continue;
         }
 
+        // Headings always break lists
+        if (getHeadingLevel(line) > 0) {
+            break;
+        }
+
         const indent = getListIndent(line);
         if (indent > baseIndent || (indent === baseIndent && !isListItem(line))) {
             result.push(line);

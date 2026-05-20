@@ -19,7 +19,7 @@ export const DEFAULT_SETTINGS: MarkmapSettings = {
     autoExpand: true,
     defaultExpandLevel: 2,
     theme: 'auto',
-    colorFreezeLevel: 2,
+    colorFreezeLevel: 5,
     panZoom: true,
     showToolbar: true,
     dragEnabled: true,
@@ -65,12 +65,12 @@ export interface DragOperation {
     toParentId?: string;
     toIndex: number;
 }
-
+// think of ['# qq','## saa'], line one is '# qq' and ch is 4
 export interface MarkdownEdit {
-    fromLine: number;
-    fromCh?: number;
-    toLine: number;
-    toCh?: number;
+    fromLine: number; // it represents which line it starts
+    fromCh?: number;// it represents character size in this start line
+    toLine: number;// it represents which line it ends
+    toCh?: number;// it represents character size in the end line
     newText: string;
     oldText?: string;
 }
