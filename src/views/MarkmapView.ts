@@ -109,10 +109,20 @@ export class MarkmapView extends ItemView {
     }
 
     refresh(): void {
-        this.app.workspace.getActiveViewOfType(MarkdownView)?.editor.setCursor({line: 0, ch: 0});
-        requestAnimationFrame(() => {
-            this.updateFromActiveFile();
-        })
+        this.updateFromActiveFile();
+     /*   document.querySelectorAll<extendedSvgGEle>('.markmap-node').forEach((gEle: extendedSvgGEle) => {
+            const depth = gEle.dataset.depth
+            if (depth === '1') {
+                const line = gEle.__data__.payload?.lines as string;
+
+                this.app.workspace.getActiveViewOfType(MarkdownView)?.editor.setCursor({
+                    line: Number(line.split(',')[0]),
+                    ch: 0
+                });
+
+            }
+
+        })*/
     }
 
     private createToolbar(): void {
@@ -168,6 +178,11 @@ export class MarkmapView extends ItemView {
             onNodeDragStart: this.settings.dragEnabled ? (node, event) => this.handleNodeDragStart(node, event) : undefined,
             onNodeDragEnd: this.settings.dragEnabled ? (node, event) => this.handleNodeDragEnd(node, event) : undefined,
             onNodeDrop: this.settings.dragEnabled ? (node, event) => this.handleNodeDrop(node, event) : undefined,
+            onZoom: () => {
+                if (this.editorOverlay) {
+                    this.updateEditorPosition();
+                }
+            }
         });
     }
 
@@ -185,10 +200,10 @@ export class MarkmapView extends ItemView {
                 // Avoid updating if the leaf change is due to focusing this view itself
                 /*  if (leaf?.view !== this)
                       return this.clearNodeSelection();*/
-                throttle(()=>{
-                    this.updateFromActiveFile();//, this.isFirstInvoke = false;
-                },1)()
-
+                /*  this.updateNode_deboucer.setWait(1);
+                  this.updateNode_deboucer.executeDebounced(()=>{
+                  });*/
+                 this.updateFromActiveFile();//, this.isFirstInvoke = false;
             })
         );
 
@@ -238,9 +253,11 @@ export class MarkmapView extends ItemView {
         });
 
         this.registerDomEvent(window, 'click', (e: MouseEvent) => {
-            throttle(()=>{
-                this.handleEditorChange();
-            },1)()
+            /* this.updateNode_deboucer.setWait(1);
+             this.updateNode_deboucer.executeDebounced(()=>{
+             });*/
+            this.handleEditorChange();
+
         }, {capture: true});
 
 
@@ -269,7 +286,7 @@ export class MarkmapView extends ItemView {
     }
 
     // focus on a specific node when clicking a markdown line
-    private handleCursorActivity(editor = this.getMarkdownEditor(),callback:(node:IPureNode)=>void): void {
+    private handleCursorActivity(editor = this.getMarkdownEditor(), callback: (node: IPureNode) => void): void {
         if (!editor) return;
 
         const cursor = editor.getCursor();
@@ -308,7 +325,7 @@ export class MarkmapView extends ItemView {
         if (!val) return Promise.resolve(false);
 
         if (ontransitionend && this.selectedSvgNode) {
-            this.renderer?.setOntransitionend(ontransitionend, this.selectedSvgNode,operationType);
+            this.renderer?.setOntransitionend(ontransitionend, this.selectedSvgNode, operationType);
         }
 
         return this.updateMarkmapFromMarkdown(val);
@@ -328,7 +345,8 @@ export class MarkmapView extends ItemView {
         }
     }
 
-    updateNode_deboucer=new Debouncer(1);
+    updateNode_deboucer = new Debouncer(1);
+
     // the entrance of writing data from markdown to markmap
     private async updateFromActiveFile(): Promise<void> {
         const now = Date.now();
@@ -348,7 +366,7 @@ export class MarkmapView extends ItemView {
         let currentEditor: Editor | null = null;
         // Try to get editor from active MarkdownView for bidirectional sync
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!activeView||this.app.workspace.getActiveViewOfType(MarkmapView))return;
+        if (!activeView || this.app.workspace.getActiveViewOfType(MarkmapView)) return;
         if (activeView.file === activeFile) {
             currentEditor = activeView.editor;
         } else {
@@ -362,29 +380,23 @@ export class MarkmapView extends ItemView {
             }
         }
 
-       // if (this.compareEditors(this.currentEditor, currentEditor)) return console.error('same editor, no need to update') ;
+        // if (this.compareEditors(this.currentEditor, currentEditor)) return console.error('same editor, no need to update') ;
 
-        this.currentEditor=currentEditor;
+        this.currentEditor = currentEditor;
 
-        if (!this.currentEditor)return  this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN) ;
+        if (!this.currentEditor) return this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN);
 
         this.hideMessage();
 
-       const el=document.querySelectorAll('.markmap-node');
+        this.updateMarkmapFromEditor(this.currentEditor, () => {
 
-        this.selectedSvgNode=el[el.length-1] as extendedSvgGEle;
-
-        this.updateMarkmapFromEditor(this.currentEditor,()=>{
-            this.updateNode_deboucer.cancel();
-
-            this.updateNode_deboucer.executeDebounced(()=>{
-                console.log('debounce func is executed',new Date().toString());
-                this.handleCursorActivity(undefined,(node)=>{
+            this.updateNode_deboucer.executeDebounced(() => {
+                this.handleCursorActivity(undefined, (node) => {
                     this.focusNodeInEditor(node, undefined, true)
                 });
-            })
+            });
 
-        },'none');
+        }, 'none');
 
     }
 
@@ -414,10 +426,9 @@ export class MarkmapView extends ItemView {
         }
     }
 
-    private async focusMarkmapNode(nodeId: string): Promise<void> {
+    private async focusMarkmapNode(node: IPureNode): Promise<void> {
 
-        var node = this.renderer?.getNodeByNodeId(nodeId);
-        node && await this.renderer?.focusNode(node);
+        await this.renderer?.focusNode(node);
         await this.renderer?.zoomIn();
 
         /*  if (nodeEl) {
@@ -456,7 +467,7 @@ export class MarkmapView extends ItemView {
         //this.selectedNodeId = nodeId;
         this.addHighlight();
         this.app.workspace.getActiveViewOfType(MarkdownView) || this.markmapContainerEl?.focus(); //@TODO
-        this.focusMarkmapNode(nodeId);
+        await this.focusMarkmapNode(node);
     }
 
     private modifyTimeout: any;
@@ -489,6 +500,64 @@ export class MarkmapView extends ItemView {
         });
     }
 
+    private updateEditorPosition(): void {
+        const overlay = this.editorOverlay;
+        const newNodeEl = this.selectedSvgNode;
+        if (!overlay || !newNodeEl || !this.markmapContainerEl) return;
+
+        const input = overlay.querySelector('textarea') as HTMLTextAreaElement | null;
+        if (!input) return;
+
+        // Prefer the foreignObject inside the SVG node for precise bounds; fall back to the group bounds.
+        const foreignObj = newNodeEl.querySelector('foreignObject') as HTMLElement | null;
+        const rectOfNewNode = foreignObj ? foreignObj.getBoundingClientRect() : newNodeEl.getBoundingClientRect();
+        const containerRect = this.markmapContainerEl.getBoundingClientRect();
+
+        // Padding and sizing for modern chat-style input box
+        const padding = 12;
+        const targetWidth =Math.min(rectOfNewNode.width, containerRect.width / 3, 300)// Math.min(520, Math.floor(this.markmapContainerEl.clientWidth * 0.8));
+
+        // Calculate position: try to center horizontally, position below the node
+        let offsetLeft = rectOfNewNode.left - containerRect.left //+ (rectOfNewNode.width - targetWidth) / 2;
+        let offsetTop = rectOfNewNode.top - containerRect.top //+ padding;
+
+        // Ensure the overlay stays within container bounds
+        offsetLeft = Math.max(padding, Math.min(offsetLeft, this.markmapContainerEl.clientWidth - targetWidth ));
+        offsetTop = Math.max(padding, Math.min(offsetTop,this.markmapContainerEl.clientHeight - rectOfNewNode.height ));
+
+        // Check if editor would go off bottom; if so, position above the node
+       /* if (offsetTop + 250 > this.markmapContainerEl.clientHeight) {
+            offsetTop = Math.max(padding, rectOfNewNode.top - containerRect.top - 250 - padding);
+        }*/
+
+        overlay.style.left = `${offsetLeft}px`;
+        overlay.style.top = `${offsetTop}px`;
+        overlay.style.width= `${targetWidth}px`
+        /*overlay.style.minWidth = `${targetWidth}px`;
+        overlay.style.maxWidth = `${targetWidth}px`;*/
+
+        // Ensure textarea fills the overlay and adjust height to fit content
+        input.style.width = '100%';
+        const adjustHeight = () => {
+            input.style.height = 'auto';
+            const maxHeight =  this.markmapContainerEl!.clientHeight - Math.max(0, offsetTop) - padding;
+            const minHeight = 44;
+            const scrollHeight = input.scrollHeight;
+
+            if (scrollHeight > maxHeight) {
+                input.style.height = maxHeight + 'px';
+                input.style.overflowY = 'auto';
+            } else if (scrollHeight < minHeight) {
+                input.style.height = minHeight + 'px';
+                input.style.overflowY = 'hidden';
+            } else {
+                input.style.height = scrollHeight + 'px';
+                input.style.overflowY = 'hidden';
+            }
+        };
+        adjustHeight();
+    }
+
     private showNodeEditor(newNode: IPureNode, initialContent: string, isNewNode = true): void {
 
         this.removeEditorOverlay();
@@ -501,26 +570,80 @@ export class MarkmapView extends ItemView {
         // Create a floating HTML overlay positioned over the SVG container
         const overlay = document.createElement('div');
         overlay.addClass(CSS_CLASSES.inlineEditor);
+        this.editorOverlay = overlay;
 
-        const input = overlay.createEl('input', {
-            type: 'text',
-            value: initialContent,
+        const input = overlay.createEl('textarea', {
+            text: initialContent,
         });
 
-        // Position the overlay at the node's screen coordinates
-        const rectOfNewNode = newNodeEl.getBoundingClientRect();
-        const containerRect = this.markmapContainerEl.getBoundingClientRect();
-        const overlayMinWidth = Math.min(Math.max(rectOfNewNode.width + 24, 180), this.markmapContainerEl.clientWidth / 2);
-        const linkWidth = document.querySelector('.markmap-link')?.getBoundingClientRect().width || 0;
+
+      //  input.addEventListener('input', () => this.updateEditorPosition());
+
         overlay.style.position = 'absolute';
-        // Offset left & top slightly to account for the new Tech style padding
-
-        overlay.style.left = `${rectOfNewNode.left - containerRect.left - 4}px`;
-
-        overlay.style.top = `${rectOfNewNode.top - containerRect.top - 4}px`;
-        // Make sure it remains wide enough for the new style and padding
-        overlay.style.minWidth = `${overlayMinWidth}px`;
         overlay.style.zIndex = '100';
+
+        // When creating a new node, the node may be animating. Keep the overlay
+        // synced to the node's left/top/width during the transition using requestAnimationFrame.
+        let _rafId: number | null = null;
+        let _syncing = false;
+
+        const syncPositionToNode = () => {
+          /*  const foreignObj = newNodeEl.querySelector('foreignObject') as HTMLElement | null;
+            const rect = foreignObj ? foreignObj.getBoundingClientRect() : newNodeEl.getBoundingClientRect();
+            const containerRect = this.markmapContainerEl!.getBoundingClientRect();
+
+            const left = rect.left - containerRect.left;
+            const top = rect.top - containerRect.top;
+            const width = Math.min(rect.width,containerRect.width/3,300);
+
+            // Apply node bounds directly to overlay and input so they track the node exactly
+            overlay.style.left = `${left}px`;
+            overlay.style.top = `${top}px`;
+            overlay.style.width = `${width}px`;
+            // Make textarea fill the overlay
+            input.style.width = '100%';*/
+            this.updateEditorPosition()
+        };
+
+        const _tick = () => {
+            syncPositionToNode();
+            _rafId = requestAnimationFrame(_tick);
+        };
+
+        const startSync = () => {
+            if (_syncing) return;
+            _syncing = true;
+            _tick();
+        };
+
+        const stopSync = () => {
+            _syncing = false;
+            if (_rafId !== null) {
+                cancelAnimationFrame(_rafId);
+                _rafId = null;
+            }
+        };
+
+        // Attach transition listeners to detect animation. Always sync once immediately
+        // so overlay is positioned even if there's no transition.
+        syncPositionToNode();
+        newNodeEl.addEventListener('transitionstart', startSync);
+        newNodeEl.addEventListener('transitionend', () => {
+            stopSync();
+            // Ensure final position after transition
+            syncPositionToNode();
+        });
+
+        // Expose a cleanup hook on the overlay so removeEditorOverlay can stop the RAF
+        (overlay as any)._stopSync = () => {
+            stopSync();
+            try {
+                newNodeEl.removeEventListener('transitionstart', startSync);
+                // transitionend listener is anonymous above; safe to leave or could be removed via reference if needed
+            } catch (e) {
+                // ignore
+            }
+        };
 
         const commitEdit = async () => {
 
@@ -532,20 +655,21 @@ export class MarkmapView extends ItemView {
                     // Re-render markmap to reflect the edit
                     this.updateMarkmapFromEditor(editor, () => {
                         this.focusNodeInEditor(newNode);
-                    });
+                    }, 'change-current');
                 }
             } else cancelEdit();
         };
 
         const cancelEdit = () => {
             this.removeEditorOverlay();
+            this.markmapContainerEl?.focus();
         };
 
         input.addEventListener('keydown', (e: KeyboardEvent) => {
             e.stopPropagation();
             //@ts-ignore
-            if (e.currentTarget.nodeName != 'INPUT') return;
-            if (e.key === 'Enter') {
+            if (e.currentTarget.nodeName != 'TEXTAREA') return;
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 commitEdit();
             } else if (e.key === 'Escape') {
@@ -555,15 +679,27 @@ export class MarkmapView extends ItemView {
         });
 
         this.markmapContainerEl.appendChild(overlay);
-        this.editorOverlay = overlay;
+        this.updateEditorPosition();
+
         input.focus();
-        isNewNode && input.select();
+        if (isNewNode) {
+            input.select();
+        } else {
+            input.selectionStart = input.selectionEnd = input.value.length;
+        }
 
     }
 
     private removeEditorOverlay(): void {
-        if (this.editorOverlay && this.markmapContainerEl) {
-            this.markmapContainerEl.removeChild(this.editorOverlay);
+        if (this.editorOverlay) {
+            // Stop any running sync loop if present
+            const stop = (this.editorOverlay as any)._stopSync;
+            if (typeof stop === 'function') {
+                try { stop(); } catch (e) { /* ignore */ }
+            }
+            if (this.markmapContainerEl && this.markmapContainerEl.contains(this.editorOverlay)) {
+                this.markmapContainerEl.removeChild(this.editorOverlay);
+            }
         }
         this.editorOverlay = null;
         this.renderer?.unlockZoom();
@@ -760,7 +896,7 @@ export class MarkmapView extends ItemView {
 
             this.updateMarkmapFromEditor(editor, () => {
                 this.findAndEditNewNode(result.line);
-            }, 'insert-child');
+            }, 'insert-sibling');
         });
     }
 
@@ -809,7 +945,7 @@ export class MarkmapView extends ItemView {
                     const plainText = this.syncEngine!.getMappingManager().extractTextContent(node.content);
                     // Check if it's actually the "New Node" we just added
                     if (plainText === 'New Node') { //todo the if is redundant
-                        this.focusNodeInEditor(node);
+                        await this.focusNodeInEditor(node);
 
                         /*shownodeeditor must be called before calling focusnodeineditor, because it relies on selectednodeid */
                         this.showNodeEditor(node, plainText);

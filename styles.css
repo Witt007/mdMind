@@ -116,55 +116,75 @@
     stroke-dasharray: 4;
 }
 
-/* Inline Editor - Tech Visualization Effect */
+/* Inline Editor - Chat Input Box Style */
 .markmap-inline-editor {
     position: absolute;
     z-index: 100;
-    min-width: 10rem;
-    max-width: 20rem;
-    height: 2.5rem;
     pointer-events: auto;
-
-    /* Intelligent Tech Glassmorphism */
-    border-radius: 16px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow:2px 3px 3px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgb(100,150,200);
-    transform-origin: center center;
-    /*filter: drop-shadow(0 0 8px rgb(80, 150, 210));*/
+    
+    /* Chat input box dimensions */
+    min-width: 320px;
+    max-width: 600px;
+    min-height: 44px;
+    max-height: 320px;
+    
+    /* Clean modern look */
+    border-radius: 12px;
+    border: 1px solid var(--divider-color);
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+    
+    /* Layout container */
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
 }
 
-.markmap-inline-editor input {
+.markmap-inline-editor textarea {
     width: 100%;
-    height: 100%;
+    flex: 1;
     border: none;
-    border-radius: 16px;
     background: transparent;
     outline: none;
-    position: relative;
-    z-index: 1;
-    transition: all 0.3s ease;
+    resize: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    
+    /* Spacing and typography */
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-normal);
+    
+    /* Smooth transitions */
+    transition: background-color 0.2s ease;
 }
 
-.markmap-inline-editor input:focus {
-    text-shadow: unset;
+.markmap-inline-editor textarea::placeholder {
+    color: var(--text-muted);
 }
 
-/* Cybernetic Scanning Line Effect */
-.markmap-inline-editor::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 100%;
-    background: rgba(155, 154, 252, 0.2);
-    box-shadow: 0 0 10px var(--interactive-accent), 0 0 20px var(--interactive-accent);
-    /*animation: markmap-scan-line 2s linear infinite;*/
-    z-index: 2;
-    pointer-events: none;
-    opacity: 0.2;
+.markmap-inline-editor textarea:focus {
+    background-color: rgba(var(--interactive-accent-rgb), 0.02);
+}
+
+/* Custom scrollbar styling */
+.markmap-inline-editor textarea::-webkit-scrollbar {
+    width: 6px;
+}
+
+.markmap-inline-editor textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.markmap-inline-editor textarea::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 3px;
+}
+
+.markmap-inline-editor textarea::-webkit-scrollbar-thumb:hover {
+    background: var(--text-normal);
 }
 
 @keyframes markmap-editor-pop {

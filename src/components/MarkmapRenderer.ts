@@ -3,10 +3,13 @@ import {IPureNode, INode} from 'markmap-common';
 import {Markmap} from 'markmap-view';
 import {MarkmapSettings} from '../types';
 import {CSS_CLASSES, MARKMAP_COLORS} from '../constants';
+import * as d3 from 'd3';
 import {BaseType, Transition} from "d3";
 import {extendedSvgGEle} from "../views/MarkmapView";
+import {Debouncer} from "../utils/debounce";
 
-export type operationType="insert-child" | "insert-sibling" | "change-current" | "delete-current" | "none"
+export type operationType = "insert-child" | "insert-sibling" | "change-current" | "delete-current" | "none"
+
 export interface MarkmapRendererOptions {
     onNodeClick?: (node: IPureNode, event: MouseEvent) => void;
     onNodeDblClick?: (node: IPureNode, event: KeyboardEvent | MouseEvent) => void;
@@ -14,6 +17,7 @@ export interface MarkmapRendererOptions {
     onNodeDragStart?: (node: IPureNode, event: DragEvent) => void;
     onNodeDragEnd?: (node: IPureNode, event: DragEvent) => void;
     onNodeDrop?: (node: IPureNode, event: DragEvent) => void;
+    onZoom?: () => void;
 }
 
 export class MarkmapRenderer {
@@ -46,7 +50,7 @@ export class MarkmapRenderer {
         this.init();
     }
 
-    getSvg():SVGElement|null{
+    getSvg(): SVGElement | null {
         return this.svg;
     }
 
@@ -92,28 +96,41 @@ export class MarkmapRenderer {
 
     transitionTime = 0
 
-    setOntransitionend(callack: () => void,selectedSvgNode:extendedSvgGEle,operationType:typeof this.operationType) {
+    setOntransitionend(callack: () => void, selectedSvgNode: extendedSvgGEle, operationType: typeof this.operationType) {
         if (!this.markmap) return;
-        console.log('setOntransitionen called at ',new Date().toString());
+        console.log('setOntransitionen called at ', new Date().toString());
         this.ontransitionend = callack;
-        this.selectedSvgNode =selectedSvgNode ;
-        this.operationType=operationType;
+        this.selectedSvgNode = selectedSvgNode;
+        this.operationType = operationType;
     }
 
     ontransitionend: () => void = () => {
     }
 
     private selectedSvgNode: extendedSvgGEle | null = null;
-    private operationType:operationType  = "none";
+    private operationType: operationType = "none";
+    private debouncer=new Debouncer(1);
 
-    private resetMarkmapTransition(){
+    private resetMarkmapTransition() {
         const self = this;
         Markmap.prototype.transition = function (t) {
             let {duration: r} = this.options;
             const transition = t.transition().duration(r);
-            transition.on('end',function (datum, index, groups) {
-                const mnode=datum as IPureNode
+            transition.on('end', function (datum, index, groups) {
+                const mnode = datum as IPureNode
+                const foreignObj = Array.from(groups).find(g => (<SVGForeignObjectElement>g)?.nodeName === 'foreignObject') as extendedSvgGEle | undefined;
 
+                if (!foreignObj) return;
+
+                const execution = () => {
+                    self.debouncer.executeDebounced(()=>{
+                        self.ontransitionend();
+                        self.selectedSvgNode = null;
+                        self.ontransitionend = () => {
+                        };
+                    })
+                }
+                if (self.operationType == 'none') return execution();
 
                 let currentNode: any = self.selectedSvgNode;
                 if (self.operationType == 'insert-sibling') currentNode = self.selectedSvgNode?.nextElementSibling;
@@ -132,23 +149,17 @@ export class MarkmapRenderer {
                     }
                 })()
 
-                const selectednodeid=currentNode?.__data__?.payload?.nodeId
-                const foreignObj=Array.from(groups).find(g=>(<SVGForeignObjectElement>g)?.nodeName==='foreignObject') as extendedSvgGEle|undefined;
-                const isChangeCurrent=self.operationType=='change-current'?mnode?.content!==currentNode?.__data__?.content:mnode?.content===currentNode?.__data__?.content;
+                const selectednodeid = currentNode?.__data__?.payload?.nodeId
+                const isChangeCurrent = self.operationType == 'change-current' ? mnode?.content !== currentNode?.__data__?.content : mnode?.content === currentNode?.__data__?.content;
                 //make sure it only is invoked once
-                if (foreignObj) {
-                    console.log(datum, '\n', groups, '\n', index);
-                    if (self.operationType=='none'||(mnode?.payload?.nodeId===selectednodeid&&
-                        isChangeCurrent)) {
-                        self.ontransitionend();
-                        self.selectedSvgNode=null;
-                        self.ontransitionend=()=>{};
-                    }
-                }
+                if ((mnode?.payload?.nodeId === selectednodeid &&
+                    isChangeCurrent)) execution();
+
             });
             return transition;
         }
     }
+
     async render(markdown: string, filename?: string): Promise<ITransformResult | null> {
         try {
             const result = this.transformer.transform(markdown);
@@ -164,14 +175,14 @@ export class MarkmapRenderer {
             this.currentRoot = rootNode;
 
             if (this.markmap) {
-                 this.assignNodeIds();
-                 this.markmap.setData(rootNode);
+                this.assignNodeIds();
+                this.markmap.setData(rootNode);
                 //this.markmap.fit();
             } else {
 
-                 this.assignNodeIds();
+                this.assignNodeIds();
 
-                this.markmap =  Markmap.create(this.svg!, {
+                this.markmap = Markmap.create(this.svg!, {
                     /*autoFit: true,
                    fitRatio: 0.8,*/
                     duration: 400,
@@ -368,12 +379,21 @@ export class MarkmapRenderer {
         // which calls stopImmediatePropagation() and would otherwise swallow the event.
         // stopPropagation() here prevents d3-zoom from also zooming.
         this.container.addEventListener('wheel', (e) => {
+            if ((e.target as HTMLElement).closest(`.${CSS_CLASSES.inlineEditor}`)) {
+                return;
+            }
             e.preventDefault();
             if (!this.markmap || this.zoomLocked) e.stopPropagation();
 
             /*const scale = e.deltaY > 0 ? 0.9 : 1.1;
             void this.markmap.rescale(scale);*/
         }, {capture: true, passive: false});
+
+        this.markmap.zoom.on('zoom.renderer', () => {
+            if (this.options.onZoom) {
+                this.options.onZoom();
+            }
+        });
     }
 
     private findNodeElementFromEvent(e: MouseEvent): Element | null {
