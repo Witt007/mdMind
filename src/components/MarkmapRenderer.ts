@@ -96,10 +96,11 @@ export class MarkmapRenderer {
 
     transitionTime = 0
 
-    setOntransitionend(callack: () => void, selectedSvgNode: extendedSvgGEle, operationType: typeof this.operationType) {
+    setOntransitionend(callack: () => void, selectedSvgNode: extendedSvgGEle|undefined, operationType: typeof this.operationType) {
         if (!this.markmap) return;
         console.log('setOntransitionen called at ', new Date().toString());
         this.ontransitionend = callack;
+        if (selectedSvgNode)
         this.selectedSvgNode = selectedSvgNode;
         this.operationType = operationType;
     }
