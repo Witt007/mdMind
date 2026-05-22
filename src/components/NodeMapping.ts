@@ -49,6 +49,10 @@ export class NodeMappingManager {
         this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
     }
 
+    public getContentLines(): string[] {
+        return this.contentLines;
+    }
+
     clear(): void {
         this.mappings.clear();
         this.lineMap = {};
