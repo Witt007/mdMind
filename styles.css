@@ -318,12 +318,96 @@
 }
 
 /* Theme Adaptations */
+.theme-dark {
+    --markmap-shadow-color: rgba(0, 0, 0, 0.3);
+    --markmap-selected-bg: rgba(100, 150, 200, 0.15);
+    --markmap-selected-border: rgba(100, 150, 200, 0.4);
+}
+
+.theme-light {
+    --markmap-shadow-color: rgba(0, 0, 0, 0.15);
+    --markmap-selected-bg: rgba(38, 86, 111, 0.25);
+    --markmap-selected-border: rgba(255, 30, 0, 0.3);
+}
+
 .theme-dark .markmap-sync-svg {
     color-scheme: dark;
 }
 
 .theme-light .markmap-sync-svg {
     color-scheme: light;
+}
+
+/* Dark Theme - Enhanced Styles */
+.theme-dark .markmap-sync-container {
+    background: var(--background-primary);
+}
+
+.theme-dark .markmap-inline-editor {
+    border: 1px solid var(--divider-color);
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 12px var(--markmap-shadow-color), 0 2px 4px var(--markmap-shadow-color);
+}
+
+.theme-dark .markmap-inline-editor textarea {
+    background: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.theme-dark .markmap-inline-editor textarea:focus {
+    background-color: var(--background-secondary);
+}
+
+.theme-dark .markmap-node-selected .markmap-foreign {
+    background: var(--markmap-selected-bg) !important;
+}
+
+.theme-dark .markmap-node-selected foreignObject {
+    outline: 2px solid var(--markmap-selected-border) !important;
+}
+
+.theme-dark .markmap-context-menu {
+    background: var(--background-primary);
+    border: 1px solid var(--divider-color);
+    box-shadow: 0 4px 12px var(--markmap-shadow-color);
+}
+
+.theme-dark .markmap-node-highlighted {
+    filter: drop-shadow(0 0 8px var(--interactive-accent));
+}
+
+/* Light Theme - Enhanced Styles */
+.theme-light .markmap-sync-container {
+    background: var(--background-primary);
+}
+
+.theme-light .markmap-inline-editor {
+    border: 1px solid var(--divider-color);
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 12px var(--markmap-shadow-color), 0 2px 4px var(--markmap-shadow-color);
+}
+
+.theme-light .markmap-inline-editor textarea {
+    background: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.theme-light .markmap-inline-editor textarea:focus {
+    background-color: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+.theme-light .markmap-node-selected .markmap-foreign {
+    background: var(--markmap-selected-bg) !important;
+}
+
+.theme-light .markmap-node-selected foreignObject {
+    outline: 2px solid var(--markmap-selected-border) !important;
+}
+
+.theme-light .markmap-context-menu {
+    background: var(--background-primary);
+    border: 1px solid var(--divider-color);
+    box-shadow: 0 4px 12px var(--markmap-shadow-color);
 }
 
 /* Foreign Object Content */
