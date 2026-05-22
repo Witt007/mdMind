@@ -18,6 +18,7 @@ export interface MarkmapRendererOptions {
     onNodeDragEnd?: (node: IPureNode, event: DragEvent) => void;
     onNodeDrop?: (node: IPureNode, event: DragEvent) => void;
     onZoom?: () => void;
+    onUpdate?: () => void;
 }
 
 export class MarkmapRenderer {
@@ -129,6 +130,9 @@ export class MarkmapRenderer {
                         self.selectedSvgNode = null;
                         self.ontransitionend = () => {
                         };
+                        if (self.options.onUpdate) {
+                            self.options.onUpdate();
+                        }
                     })
                 }
                 if (self.operationType == 'none') return execution();
@@ -208,6 +212,9 @@ export class MarkmapRenderer {
                     }, waitTime);
                 });*/
             //this.svg?.focus({preventScroll: true});
+            if (this.options.onUpdate) {
+                this.options.onUpdate();
+            }
             return {...result, root: rootNode};
         } catch (error) {
             console.error('Failed to render markmap:', error);

@@ -513,3 +513,155 @@
         transform: scale(0.8);
     }
 }
+
+/* Comment & Annotation System Styles */
+.markmap-foreign {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    overflow: visible !important;
+}
+
+.markmap-node foreignObject {
+    overflow: visible !important;
+}
+
+.markmap-comment-container {
+    display: inline-flex !important;
+    align-items: center !important;
+    margin-left: 8px !important;
+    vertical-align: middle !important;
+    flex-shrink: 0 !important;
+    pointer-events: auto !important;
+    right: -30px;
+    position: fixed;
+    top: 0;
+}
+
+.markmap-comment-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0.6;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.markmap-comment-icon:hover {
+    color: var(--interactive-accent) !important;
+    opacity: 1 !important;
+    transform: scale(1.15);
+    background: var(--background-modifier-hover);
+}
+
+/* Highlight or select node also highlights the comment icon */
+.markmap-node-highlighted .markmap-comment-icon,
+.markmap-node-selected .markmap-comment-icon {
+    color: var(--interactive-accent);
+    opacity: 1;
+}
+
+.markmap-comment-popup {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    
+    min-width: 260px;
+    max-width: 380px;
+    max-height: 280px;
+    overflow-y: auto;
+    
+    padding: 12px 16px;
+    border-radius: 8px;
+    
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    
+    transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1), 
+                transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), 
+                visibility 0.22s;
+    
+    z-index: 1000;
+    
+    /* Premium Typography & Spacing */
+    font-family: var(--font-interface);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: normal;
+    text-align: left;
+    
+    /* Premium Shadows */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 
+                0 1px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Scrollbar styling for comments popup */
+.markmap-comment-popup::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+.markmap-comment-popup::-webkit-scrollbar-track {
+    background: transparent;
+}
+.markmap-comment-popup::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 2px;
+}
+.markmap-comment-popup::-webkit-scrollbar-thumb:hover {
+    background: var(--text-normal);
+}
+
+/* Theme-specific Glassmorphism styles */
+.theme-dark .markmap-comment-popup {
+    background: rgba(30, 30, 30, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    color: var(--text-normal) !important;
+}
+
+.theme-light .markmap-comment-popup {
+    background: rgba(255, 255, 255, 0.85) !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    color: var(--text-normal) !important;
+}
+
+/* Markdown formatting inside comments popup */
+.markmap-comment-popup p {
+    margin: 0 0 8px 0;
+}
+.markmap-comment-popup p:last-child {
+    margin-bottom: 0;
+}
+.markmap-comment-popup ul, 
+.markmap-comment-popup ol {
+    margin: 0 0 8px 0;
+    padding-left: 18px;
+}
+.markmap-comment-popup li {
+    margin-bottom: 4px;
+}
+.markmap-comment-popup code {
+    font-family: var(--font-mono);
+    background: var(--code-background);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* Visibility triggers */
+.markmap-comment-container:hover .markmap-comment-popup,
+.markmap-node-highlighted .markmap-comment-popup,
+.markmap-node-selected .markmap-comment-popup {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
