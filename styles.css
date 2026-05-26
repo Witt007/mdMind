@@ -75,7 +75,7 @@
 }
 
 .markmap-node-highlighted .markmap-foreign,
-.markmap-node-highlighted .markmap-foreign div {
+.markmap-node-highlighted .markmap-foreign>:first-child div {
     cursor: pointer;
     color: white !important;
 }
@@ -93,7 +93,7 @@
 }
 
 .markmap-node-selected .markmap-foreign,
-.markmap-node-selected .markmap-foreign div {
+.markmap-node-selected .markmap-foreign>:first-child div {
     cursor: pointer;
     background: rgb(38 86 111 / 40%) !important;
     border-radius: 4px;
@@ -529,13 +529,26 @@
 .markmap-comment-container {
     display: inline-flex !important;
     align-items: center !important;
-    margin-left: 8px !important;
+    position: absolute;
     vertical-align: middle !important;
     flex-shrink: 0 !important;
     pointer-events: auto !important;
-    right: -30px;
-    position: fixed;
-    top: 0;
+    right: -25px;
+    top: 1px;
+}
+
+/* Host layer for comment popups. Lives outside the SVG so popups are not
+   clipped by foreignObject hit-testing and are stacked above all SVG nodes. */
+.markmap-comment-popup-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 5;
+}
+
+.markmap-comment-popup-layer .markmap-comment-popup {
+    pointer-events: auto;
 }
 
 .markmap-comment-icon {
@@ -559,24 +572,29 @@
 
 /* Highlight or select node also highlights the comment icon */
 .markmap-node-highlighted .markmap-comment-icon,
-.markmap-node-selected .markmap-comment-icon {
+.markmap-node-selected .markmap-comment-icon,
+.markmap-node:hover .markmap-comment-icon {
     color: var(--interactive-accent);
     opacity: 1;
 }
 
 .markmap-comment-popup {
+    /* Popup is positioned via JS (left/top relative to the popup-layer)
+       so it follows markmap pan/zoom and lives above the SVG. */
     position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%) translateY(4px);
+    left: 0;
+    top: 0;
+    transform: translate(-50%, 4px);
     
     min-width: 260px;
     max-width: 380px;
     max-height: 280px;
     overflow-y: auto;
     
+    box-sizing: border-box;
+ 
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 10px;
     
     opacity: 0;
     visibility: hidden;
@@ -595,9 +613,42 @@
     white-space: normal;
     text-align: left;
     
-    /* Premium Shadows */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 
-                0 1px 8px rgba(0, 0, 0, 0.1);
+    background: var(--background-floating, var(--background-primary)) !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    color: var(--text-normal) !important;
+    
+                 backdrop-filter: blur(10px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(145%) !important;
+ 
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26),
+                0 6px 18px rgba(0, 0, 0, 0.16),
+                0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+body.theme-light .markmap-comment-popup {
+    background: color-mix(in srgb, var(--background-floating, var(--background-primary)) 96%, white) !important;
+    border-color: color-mix(in srgb, var(--background-modifier-border) 72%, var(--text-muted)) !important;
+    box-shadow: 0 18px 42px rgba(31, 35, 40, 0.18),
+                0 5px 16px rgba(31, 35, 40, 0.12),
+                0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+ 
+body.theme-dark .markmap-comment-popup {
+    background: color-mix(in srgb, var(--background-floating, var(--background-primary)) 92%, black) !important;
+    border-color: color-mix(in srgb, var(--background-modifier-border) 72%, var(--text-muted)) !important;
+    box-shadow: 0 22px 54px rgba(0, 0, 0, 0.48),
+                0 7px 22px rgba(0, 0, 0, 0.34),
+                0 0 0 1px rgba(255, 255, 255, 0.07) inset;
+}
+
+/* Gap-bridging pseudo-element so mouse hover is not lost between icon and popup */
+.markmap-comment-popup::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
 }
 
 /* Scrollbar styling for comments popup */
@@ -614,23 +665,6 @@
 }
 .markmap-comment-popup::-webkit-scrollbar-thumb:hover {
     background: var(--text-normal);
-}
-
-/* Theme-specific Glassmorphism styles */
-.theme-dark .markmap-comment-popup {
-    background: rgba(30, 30, 30, 0.85) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(12px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-    color: var(--text-normal) !important;
-}
-
-.theme-light .markmap-comment-popup {
-    background: rgba(255, 255, 255, 0.85) !important;
-    border: 1px solid rgba(0, 0, 0, 0.12) !important;
-    backdrop-filter: blur(12px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-    color: var(--text-normal) !important;
 }
 
 /* Markdown formatting inside comments popup */
@@ -656,12 +690,96 @@
     font-size: 0.9em;
 }
 
-/* Visibility triggers */
-.markmap-comment-container:hover .markmap-comment-popup,
-.markmap-node-highlighted .markmap-comment-popup,
-.markmap-node-selected .markmap-comment-popup {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
+/* Inline Comment Editor Styles */
+.markmap-comment-edit-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.markmap-comment-popup:hover .markmap-comment-edit-btn {
+    opacity: 0.7;
+}
+
+.markmap-comment-edit-btn:hover {
+    opacity: 1 !important;
+    background: var(--background-modifier-hover);
+    color: var(--interactive-accent);
+}
+
+.markmap-comment-textarea {
+    width: 100%;
+    min-height: 80px;
+       max-height: min(180px, calc(100vh - 180px));
+    box-sizing: border-box;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 8px;
+    color: var(--text-normal);
+    font-family: var(--font-interface);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    margin-bottom: 8px;
+}
+
+.markmap-comment-textarea:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.15);
+}
+
+.markmap-comment-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.markmap-comment-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.markmap-comment-btn.save {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent, white);
+    border-color: var(--interactive-accent);
+}
+
+.markmap-comment-btn.save:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.markmap-comment-btn.cancel:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* Visibility triggers (JS activated) */
+.markmap-comment-popup.is-active,
+.markmap-comment-popup.is-editing {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    transform: translate(-50%, 0) !important;
 }

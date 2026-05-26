@@ -81,6 +81,17 @@ export class NodeMappingManager {
         return this.getAllMappings().filter(m => m.parentId === nodeId);
     }
 
+    hasOtherNodeStartInRange(excludeNodeId: string, fromLine: number, toLine: number): boolean {
+        for (let line = fromLine; line <= toLine; line++) {
+            const nodeIds = this.lineMap[line];
+            if (!nodeIds || nodeIds.length === 0) continue;
+            if (nodeIds.some((id) => id !== excludeNodeId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // the purpose is just mapping the node to the line, so we can find the node by line number when we click on the line, and find the line number by node when we click on the node;
     private processNode(node: IPureNode, depth: number, parentId?: string): void {
         const content = this.extractTextContent(node.content);
@@ -157,6 +168,8 @@ export class NodeMappingManager {
         const baseIndent = this.getLineIndent(startLine);
         let endLine = startLine;
 
+        const startIsListItem = /^\s*[-*+]|^\s*\d+\./.test(this.contentLines[startLine] || '');
+
         for (let i = startLine + 1; i < this.contentLines.length; i++) {
             const line = this.contentLines[i];
 
@@ -174,7 +187,7 @@ export class NodeMappingManager {
                 if (level <= depth + 1) {
                     break;
                 }
-            } else if (isListItem && indent <= baseIndent) {
+            } else if (startIsListItem && isListItem && indent <= baseIndent) {
                 break;
             }
 

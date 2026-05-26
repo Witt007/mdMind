@@ -1,10 +1,12 @@
-import {Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf, MarkdownRenderer} from 'obsidian';
-import {IPureNode} from 'markmap-common';
-import {MarkmapRenderer, operationType} from '../components/MarkmapRenderer';
-import {SyncEngine} from '../components/SyncEngine';
-import {MarkmapSettings} from '../types';
-import {CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP} from '../constants';
-import {Debouncer, throttle} from '../utils/debounce';
+import { Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { IPureNode } from 'markmap-common';
+import { MarkmapRenderer, operationType } from '../components/MarkmapRenderer';
+import { SyncEngine } from '../components/SyncEngine';
+import { CommentOverlay } from '../components/CommentOverlay';
+import { MarkmapSettings } from '../types';
+import { CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP } from '../constants';
+import { Debouncer, throttle } from '../utils/debounce';
+import { buildCommentIndex, canAddCommentToNode, computeCommentSlot, CommentSlotInfo } from '../utils/commentSlot';
 import { generateNodeEditorStyles } from '../utils/theme';
 
 export interface MarkmapToolbar {
@@ -34,6 +36,11 @@ export class MarkmapView extends ItemView {
     private editorOverlay: HTMLElement | null = null;
     private messageEl: HTMLElement | null = null;
     private markmapContainerEl: HTMLElement | null = null;
+    private commentPopupLayer: HTMLElement | null = null;
+    private commentOverlay: CommentOverlay | null = null;
+    private commentRenderDebouncer = new Debouncer(32);
+    private isEditingComment = false;
+    private editingCommentNodeId: string | null = null;
     private lastCursorTrackTime = 0;
 
     constructor(leaf: WorkspaceLeaf, settings: MarkmapSettings) {
@@ -62,7 +69,6 @@ export class MarkmapView extends ItemView {
 
     onload() {
         super.onload();
-        debugger;
         this.containerEl.addClass(CSS_CLASSES.markmapContainer);
         this.contentEl.empty();
 
@@ -90,6 +96,18 @@ export class MarkmapView extends ItemView {
         if (this.syncEngine) {
             this.syncEngine = null;
         }
+
+        if (this.commentOverlay) {
+            this.commentOverlay.destroy();
+            this.commentOverlay = null;
+        }
+
+        if (this.commentPopupLayer) {
+            this.commentPopupLayer.remove();
+            this.commentPopupLayer = null;
+        }
+
+        this.commentRenderDebouncer.cancel();
     }
 
     updateSettings(settings: MarkmapSettings): void {
@@ -111,19 +129,19 @@ export class MarkmapView extends ItemView {
 
     refresh(): void {
         this.updateFromActiveFile();
-     /*   document.querySelectorAll<extendedSvgGEle>('.markmap-node').forEach((gEle: extendedSvgGEle) => {
-            const depth = gEle.dataset.depth
-            if (depth === '1') {
-                const line = gEle.__data__.payload?.lines as string;
-
-                this.app.workspace.getActiveViewOfType(MarkdownView)?.editor.setCursor({
-                    line: Number(line.split(',')[0]),
-                    ch: 0
-                });
-
-            }
-
-        })*/
+        /*   document.querySelectorAll<extendedSvgGEle>('.markmap-node').forEach((gEle: extendedSvgGEle) => {
+               const depth = gEle.dataset.depth
+               if (depth === '1') {
+                   const line = gEle.__data__.payload?.lines as string;
+   
+                   this.app.workspace.getActiveViewOfType(MarkdownView)?.editor.setCursor({
+                       line: Number(line.split(',')[0]),
+                       ch: 0
+                   });
+   
+               }
+   
+           })*/
     }
 
     private createToolbar(): void {
@@ -132,19 +150,19 @@ export class MarkmapView extends ItemView {
         this.toolbar = this.contentEl.createDiv(CSS_CLASSES.toolbar);
 
         const buttons = [
-            {icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn()},
-            {icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut()},
-            {icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit()},
-            {icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom()},
-            {icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll()},
-            {icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll()},
-            {icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile()},
+            { icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn() },
+            { icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut() },
+            { icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit() },
+            { icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom() },
+            { icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll() },
+            { icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll() },
+            { icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile() },
         ];
 
         for (const btn of buttons) {
             const button = this.toolbar.createEl('button', {
                 cls: CSS_CLASSES.toolbarButton,
-                attr: {'aria-label': btn.tooltip},
+                attr: { 'aria-label': btn.tooltip },
             });
             button.innerHTML = this.getIconSvg(btn.icon);
             button.addEventListener('click', btn.action);
@@ -168,9 +186,31 @@ export class MarkmapView extends ItemView {
         const container = this.contentEl.createDiv();
         container.style.width = '100%';
         container.style.height = '100%';
+        container.style.position = 'relative';
         // Make container focusable so it can receive keyboard events (Enter key)
         container.setAttribute('tabindex', '0');
         this.markmapContainerEl = container;
+
+        // Dedicated overlay layer for comment popups. Hosted outside the SVG so popups
+        // are not clipped/penetrated by the foreignObject's hit region and can stack
+        // above all SVG nodes (SVG siblings ignore CSS z-index).
+        const popupLayer = container.createDiv('markmap-comment-popup-layer');
+        this.commentPopupLayer = popupLayer;
+
+        this.commentOverlay = new CommentOverlay({
+            popupLayer,
+            getEditor: () => this.getMarkdownEditor(),
+            getFilePath: () => this.file?.path || '',
+            getView: () => this,
+            onEditingChange: (isEditing, nodeId) => {
+                this.isEditingComment = isEditing;
+                this.editingCommentNodeId = nodeId ?? null;
+            },
+            onAfterEdit: () => this.onCommentEditFinished(),
+            isEditing: () => this.isEditingComment,
+            getEditingNodeId: () => this.editingCommentNodeId,
+            getContentLines: () => this.syncEngine?.getMappingManager().getContentLines() ?? [],
+        });
 
         this.renderer = new MarkmapRenderer(container, this.settings, {
             onNodeClick: (node, event) => this.focusNodeInEditor(node, event),
@@ -183,8 +223,9 @@ export class MarkmapView extends ItemView {
                 if (this.editorOverlay) {
                     this.updateEditorPosition();
                 }
+                this.commentOverlay?.repositionVisiblePopups();
             },
-            onUpdate: () => this.renderComments()
+            onUpdate: () => this.scheduleRenderComments()
         });
     }
 
@@ -198,34 +239,28 @@ export class MarkmapView extends ItemView {
 
     private registerEventListeners(): void {
         this.registerEvent(
-            this.app.workspace.on('active-leaf-change', (leaf) => {
-                // Avoid updating if the leaf change is due to focusing this view itself
-                /*  if (leaf?.view !== this)
-                      return this.clearNodeSelection();*/
-                /*  this.updateNode_deboucer.setWait(1);
-                  this.updateNode_deboucer.executeDebounced(()=>{
-                  });*/
-                 this.updateFromActiveFile();//, this.isFirstInvoke = false;
+            this.app.workspace.on('active-leaf-change', (_leaf) => {
+                const activeFile = this.app.workspace.getActiveFile();
+                if (activeFile !== this.file) {
+                    this.resetStateOnFileChange();
+                }
+                this.updateFromActiveFile();
             })
         );
 
         this.registerEvent(
             this.app.workspace.on('editor-change', (editor) => {
                 if (this.isActiveEditor(editor)) {
-                    this.handleEditorChange();
+                    this.debouncer.setWait(2000);
+                    this.debouncer.executeDebounced(() => {
+                        this.updateFromActiveFile();
+                    });
                 }
             })
         );
 
-        // Ctrl+Enter/Tab to insert sibling/child node when a node is selected.
-        // Registered on document in capture phase to run before Obsidian's global hotkey
-        // handler (which also listens in capture phase at document level and would otherwise
-        // consume Ctrl+Enter before it reaches the markmap container).
+        // Ctrl+Enter/Tab etc. on the markmap container when it has focus.
         this.markmapContainerEl && this.registerDomEvent(this.markmapContainerEl, 'keydown', (e: KeyboardEvent) => {
-            /*const container = this.markmapContainerEl ?? this.containerEl;
-            if (!container.contains(document.activeElement)) return;*/
-            //@ts-ignore
-            //if (e.currentTarget.nodeName != '#document') return;
             if (this.app.workspace.getActiveViewOfType(MarkdownView)) return;// make sure it is not triggered in markdown mode;
 
             if (e.key === 'Enter') {
@@ -235,13 +270,25 @@ export class MarkmapView extends ItemView {
             } else if (e.key === 'Backspace') this.handleBackspaceKey(e);
             else if (e.key === ' ') {
                 this.handleNodeDblClick(e)
+            } else if (['ArrowRight', 'ArrowDown', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
+                void this.handleArrowKey(e);
             }
-        }, {capture: false});
+        }, { capture: false });
+
+        // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
+        // but a markmap node is already selected in this view.
+        const cmScroller = document.querySelector('.cm-scroller') as HTMLElement | null;
+        cmScroller && this.registerDomEvent(cmScroller, 'keydown', (e: KeyboardEvent) => {
+            if (!this.isAddCommentChord(e) || !this.shouldHandleAddCommentHotkey(e)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            void this.addCommentToSelectedNode();
+        }, { capture: true });
 
         // Clear selection and highlight when clicking outside any markmap node
         const svgEle = this.renderer?.getSvg() as HTMLElement | null;
         svgEle && this.markmapContainerEl && this.registerDomEvent(svgEle, 'click', (e: MouseEvent) => {
-
+            if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
             // If the click landed on a node or inside a node, don't clear
             this.selectedSvgNode = (e.target as Element).closest('g') as extendedSvgGEle | undefined;
             if (this.selectedSvgNode) {
@@ -258,9 +305,10 @@ export class MarkmapView extends ItemView {
             /* this.updateNode_deboucer.setWait(1);
              this.updateNode_deboucer.executeDebounced(()=>{
              });*/
-            this.handleEditorChange();
+            if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
+            this.updateFromActiveFile();
 
-        }, {capture: true});
+        }, { capture: true });
 
 
     }
@@ -269,13 +317,100 @@ export class MarkmapView extends ItemView {
         return svgNode?.__data__
     }
 
+    private shouldHandleArrowKey(e: KeyboardEvent): boolean {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return true;
+        if (target.closest('.markmap-comment-textarea')) return false;
+        if (target.closest(`.${CSS_CLASSES.inlineEditor} textarea`)) return false;
+        if (target.closest('input, textarea, select, [contenteditable="true"]')) return false;
+        return true;
+    }
+
+    private async handleArrowKey(e: KeyboardEvent): Promise<void> {
+        if (!this.shouldHandleArrowKey(e)) return;
+
+        const currentNode = this.getMNodeFromSvgNode();
+        if (!currentNode) return;
+
+        let targetNode: IPureNode | undefined;
+
+        if (e.key === 'ArrowRight') {
+            targetNode = currentNode.children?.[0];
+        } else if (e.key === 'ArrowLeft') {
+            targetNode = this.getParentNode(currentNode);
+        } else if (e.key === 'ArrowDown') {
+            targetNode = this.getSiblingNode(currentNode, 1);
+        } else if (e.key === 'ArrowUp') {
+            targetNode = this.getSiblingNode(currentNode, -1);
+        }
+
+        if (!targetNode) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        await this.focusNodeInEditor(targetNode);
+    }
+
+    private getParentNode(node: IPureNode): IPureNode | undefined {
+        const directParent = (node as any).parent as IPureNode | undefined;
+        if (directParent) return directParent;
+
+        const root = this.renderer?.getCurrentRoot();
+        if (!root || root === node) return undefined;
+
+        const findParent = (parent: IPureNode): IPureNode | undefined => {
+            if (parent.children?.includes(node)) return parent;
+            for (const child of parent.children ?? []) {
+                const found = findParent(child);
+                if (found) return found;
+            }
+            return undefined;
+        };
+
+        return findParent(root);
+    }
+
+    private getSiblingNode(node: IPureNode, offset: 1 | -1): IPureNode | undefined {
+        const parent = this.getParentNode(node);
+        if (!parent?.children) return undefined;
+
+        const nodeId = node.payload?.nodeId;
+        const currentIndex = parent.children.findIndex((child) => {
+            if (child === node) return true;
+            return !!nodeId && child.payload?.nodeId === nodeId;
+        });
+
+        if (currentIndex === -1) return undefined;
+        return parent.children[currentIndex + offset];
+    }
+
+    private getCurrentNodeForComment(): IPureNode | undefined {
+        const selectedNode = this.getMNodeFromSvgNode();
+        if (selectedNode) return selectedNode;
+
+        const editor = this.getMarkdownEditor();
+        if (!editor || !this.syncEngine || !this.renderer) return undefined;
+
+        const mapping = this.syncEngine.getMappingManager().findNearestNode(editor.getCursor().line);
+        if (!mapping) return undefined;
+
+        return this.renderer.getNodeByNodeId(mapping.nodeId) ?? undefined;
+    }
+
+    private selectNodeForComment(node: IPureNode): void {
+        this.clearNodeSelection();
+        this.selectedSvgNode = this.findSvgNodeFromMnodes(node);
+        this.addHighlight();
+    }
+
     private isActiveEditor(editor: Editor): boolean {
         //this.app.workspace.getActiveViewOfType(MarkdownView) represents the current active view is markdown editor, but it maybe is another tab of markdown editor
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         return activeView?.editor === editor && this.file === activeView.file;
     }
 
-    private handleEditorChange(): void {
+/*     private handleEditorChange(): void {
+        if (this.isEditingComment) return;
         if (!this.syncEngine?.canSync()) return;
 
         if (this.settings.syncMode === 'realtime') {
@@ -285,7 +420,7 @@ export class MarkmapView extends ItemView {
                 this.updateFromActiveFile();
             });
         }
-    }
+    } */
 
     // focus on a specific node when clicking a markdown line
     private handleCursorActivity(editor = this.getMarkdownEditor(), callback: (node: IPureNode) => void): void {
@@ -294,13 +429,12 @@ export class MarkmapView extends ItemView {
         const cursor = editor.getCursor();
         const mapping = this.syncEngine?.getMappingManager().findNearestNode(cursor.line);
 
-        if (mapping?.nodeId) {
-            // Also, visually focus the node in the markmap viewport
-            const node = this.renderer?.getNodeByNodeId(mapping.nodeId);
-            if (node) {
-                callback(node);
-            }
+        // Also, visually focus the node in the markmap viewport
+        const node = this.renderer?.getNodeByNodeId(mapping?.nodeId || 'mm-node-0');
+        if (node) {
+            callback(node);
         }
+
     }
 
     private async updateMarkmapFromMarkdown(markdown: string): Promise<boolean> {
@@ -327,7 +461,7 @@ export class MarkmapView extends ItemView {
         const val = editor ? editor.getValue() : this.file && await this.app.vault.read(this.file);
         if (!val) return Promise.resolve(false);
 
-        if (ontransitionend ) {
+        if (ontransitionend) {
             this.renderer?.setOntransitionend(ontransitionend, this.selectedSvgNode, operationType);
         }
 
@@ -352,6 +486,7 @@ export class MarkmapView extends ItemView {
 
     // the entrance of writing data from markdown to markmap
     private async updateFromActiveFile(): Promise<void> {
+        if (this.isEditingComment) return;
         const now = Date.now();
         if (now - this.lastCursorTrackTime < 100) return;
         this.lastCursorTrackTime = now;
@@ -405,7 +540,7 @@ export class MarkmapView extends ItemView {
 
     private showMessage(text: string): void {
         if (!this.messageEl) {
-            this.messageEl = this.contentEl.createDiv({cls: CSS_CLASSES.error});
+            this.messageEl = this.contentEl.createDiv({ cls: CSS_CLASSES.error });
             this.messageEl.style.position = 'absolute';
             this.messageEl.style.inset = '0';
             this.messageEl.style.display = 'flex';
@@ -429,10 +564,10 @@ export class MarkmapView extends ItemView {
         }
     }
 
-    private async focusMarkmapNode(node=this.getMNodeFromSvgNode()): Promise<void> {
+    private async focusMarkmapNode(node = this.getMNodeFromSvgNode()): Promise<void> {
 
         if (node)
-        await this.renderer?.focusNode(node);
+            await this.renderer?.focusNode(node);
         await this.renderer?.zoomIn();
 
         /*  if (nodeEl) {
@@ -461,8 +596,8 @@ export class MarkmapView extends ItemView {
           }*/
         if (!editingOnMarkdown)
             editor.scrollIntoView({
-                from: {line: mapping.startLine, ch: 0},
-                to: {line: mapping.startLine, ch: 0}
+                from: { line: mapping.startLine, ch: 0 },
+                to: { line: mapping.startLine, ch: 0 }
             }, true)
 
         this.clearNodeSelection();
@@ -515,24 +650,24 @@ export class MarkmapView extends ItemView {
 
         // Padding and sizing for modern chat-style input box
         const padding = 12;
-        const targetWidth =Math.min(rectOfNewNode.width, containerRect.width / 3, 300)// Math.min(520, Math.floor(this.markmapContainerEl.clientWidth * 0.8));
+        const targetWidth = Math.min(rectOfNewNode.width, containerRect.width / 3, 300)// Math.min(520, Math.floor(this.markmapContainerEl.clientWidth * 0.8));
 
         // Calculate position: try to center horizontally, position below the node
         let offsetLeft = rectOfNewNode.left - containerRect.left //+ (rectOfNewNode.width - targetWidth) / 2;
         let offsetTop = rectOfNewNode.top - containerRect.top //+ padding;
 
         // Ensure the overlay stays within container bounds
-        offsetLeft = Math.max(padding, Math.min(offsetLeft, this.markmapContainerEl.clientWidth - targetWidth ));
-        offsetTop = Math.max(padding, Math.min(offsetTop,this.markmapContainerEl.clientHeight - rectOfNewNode.height ));
+        offsetLeft = Math.max(padding, Math.min(offsetLeft, this.markmapContainerEl.clientWidth - targetWidth));
+        offsetTop = Math.max(padding, Math.min(offsetTop, this.markmapContainerEl.clientHeight - rectOfNewNode.height));
 
         // Check if editor would go off bottom; if so, position above the node
-       /* if (offsetTop + 250 > this.markmapContainerEl.clientHeight) {
-            offsetTop = Math.max(padding, rectOfNewNode.top - containerRect.top - 250 - padding);
-        }*/
+        /* if (offsetTop + 250 > this.markmapContainerEl.clientHeight) {
+             offsetTop = Math.max(padding, rectOfNewNode.top - containerRect.top - 250 - padding);
+         }*/
 
         overlay.style.left = `${offsetLeft}px`;
         overlay.style.top = `${offsetTop}px`;
-        overlay.style.width= `${targetWidth}px`
+        overlay.style.width = `${targetWidth}px`
         /*overlay.style.minWidth = `${targetWidth}px`;
         overlay.style.maxWidth = `${targetWidth}px`;*/
 
@@ -540,25 +675,25 @@ export class MarkmapView extends ItemView {
         input.style.width = '100%';
         const adjustHeight = () => {
             input.style.height = 'auto';
-            const maxHeight =  this.markmapContainerEl!.clientHeight - Math.max(0, offsetTop) - padding;
+            const maxHeight = this.markmapContainerEl!.clientHeight - Math.max(0, offsetTop) - padding;
             const minHeight = 44;
             const scrollHeight = input.scrollHeight;
 
             input.style.height = maxHeight + 'px';
             input.style.overflowY = 'auto';
-           /* if (scrollHeight > maxHeight) {
-            } else if (scrollHeight < minHeight) {
-                input.style.height = minHeight + 'px';
-                input.style.overflowY = 'hidden';
-            } else {
-                input.style.height = scrollHeight + 'px';
-                input.style.overflowY = 'hidden';
-            }*/
+            /* if (scrollHeight > maxHeight) {
+             } else if (scrollHeight < minHeight) {
+                 input.style.height = minHeight + 'px';
+                 input.style.overflowY = 'hidden';
+             } else {
+                 input.style.height = scrollHeight + 'px';
+                 input.style.overflowY = 'hidden';
+             }*/
         };
         adjustHeight();
     }
 
-    private showNodeEditor( initialContent: string, isNewNode = true): void {
+    private showNodeEditor(initialContent: string, isNewNode = true): void {
 
         this.removeEditorOverlay();
         this.renderer?.lockZoom();
@@ -573,20 +708,15 @@ export class MarkmapView extends ItemView {
         this.editorOverlay = overlay;
 
         const input = overlay.createEl('textarea', {
-            text: initialContent,cls:'markmap-inline-textarea'
+            text: initialContent, cls: 'markmap-inline-textarea'
         });
 
         const style = document.createElement('style');
         style.id = 'markmap-inline-styles';
-        style.textContent = `
-            .markmap-inline-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; }
-            .markmap-inline-editor { position: fixed; z-index: 1001; padding:12px; border-radius:8px; background: rgba(255,255,255,0.98); box-shadow: 0 12px 28px rgba(0,0,0,0.35); backdrop-filter: blur(6px); max-width:90vw; }
-            .markmap-inline-editor textarea { width:100%; min-height:44px; padding:10px; border-radius:6px; border:1px solid rgba(0,0,0,0.12); resize:vertical; background:transparent; }
-            .markmap-inline-editor textarea:focus { outline:none; box-shadow: 0 0 0 4px rgba(80,150,255,0.12); border-color: rgba(80,150,255,0.5); }
-            `;
+        style.textContent = generateNodeEditorStyles();
         overlay.appendChild(style);
 
-      //  input.addEventListener('input', () => this.updateEditorPosition());
+        //  input.addEventListener('input', () => this.updateEditorPosition());
 
         overlay.style.position = 'absolute';
         overlay.style.zIndex = '100';
@@ -597,20 +727,20 @@ export class MarkmapView extends ItemView {
         let _syncing = false;
 
         const syncPositionToNode = () => {
-          /*  const foreignObj = newNodeEl.querySelector('foreignObject') as HTMLElement | null;
-            const rect = foreignObj ? foreignObj.getBoundingClientRect() : newNodeEl.getBoundingClientRect();
-            const containerRect = this.markmapContainerEl!.getBoundingClientRect();
-
-            const left = rect.left - containerRect.left;
-            const top = rect.top - containerRect.top;
-            const width = Math.min(rect.width,containerRect.width/3,300);
-
-            // Apply node bounds directly to overlay and input so they track the node exactly
-            overlay.style.left = `${left}px`;
-            overlay.style.top = `${top}px`;
-            overlay.style.width = `${width}px`;
-            // Make textarea fill the overlay
-            input.style.width = '100%';*/
+            /*  const foreignObj = newNodeEl.querySelector('foreignObject') as HTMLElement | null;
+              const rect = foreignObj ? foreignObj.getBoundingClientRect() : newNodeEl.getBoundingClientRect();
+              const containerRect = this.markmapContainerEl!.getBoundingClientRect();
+  
+              const left = rect.left - containerRect.left;
+              const top = rect.top - containerRect.top;
+              const width = Math.min(rect.width,containerRect.width/3,300);
+  
+              // Apply node bounds directly to overlay and input so they track the node exactly
+              overlay.style.left = `${left}px`;
+              overlay.style.top = `${top}px`;
+              overlay.style.width = `${width}px`;
+              // Make textarea fill the overlay
+              input.style.width = '100%';*/
             this.updateEditorPosition()
         };
 
@@ -658,7 +788,7 @@ export class MarkmapView extends ItemView {
 
             const newNode = this.getMNodeFromSvgNode();
             const newContent = input.value.trim();
-            if (newNode&&newContent && newContent !== initialContent) {
+            if (newNode && newContent && newContent !== initialContent) {
                 const editor = this.getMarkdownEditor();
                 if (editor) {
                     this.syncEngine?.markmapToMarkdown(editor, newNode, 'edit', newContent);
@@ -811,7 +941,7 @@ export class MarkmapView extends ItemView {
             });
         });
 
-        menu.showAtPosition({x: event.clientX, y: event.clientY});
+        menu.showAtPosition({ x: event.clientX, y: event.clientY });
     }
 
     private handleNodeDragStart(node: IPureNode, event: DragEvent): void {
@@ -956,7 +1086,7 @@ export class MarkmapView extends ItemView {
                         await this.focusNodeInEditor(node);
 
                         /*shownodeeditor must be called before calling focusnodeineditor, because it relies on selectednodeid */
-                        this.showNodeEditor( plainText);
+                        this.showNodeEditor(plainText);
                         return;
                     }
                 }
@@ -994,6 +1124,7 @@ export class MarkmapView extends ItemView {
         if (this.selectedSvgNode) {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
+            this.scheduleRenderComments();
         }
     }
 
@@ -1005,6 +1136,15 @@ export class MarkmapView extends ItemView {
             el.removeClass(CSS_CLASSES.highlightedNode);
             el.removeClass(CSS_CLASSES.selectedNode);
         });
+        this.scheduleRenderComments();
+    }
+
+    private resetStateOnFileChange(): void {
+        this.clearNodeSelection();
+        this.commentPopupLayer?.empty();
+        this.isEditingComment = false;
+        this.editingCommentNodeId = null;
+        this.lastCursorTrackTime = 0;
     }
 
 
@@ -1030,71 +1170,149 @@ export class MarkmapView extends ItemView {
         this.containerEl.removeClass('is-syncing');
     }
 
-    private renderComments(): void {
-        if (!this.renderer || !this.syncEngine) return;
+    private isAddCommentChord(e: KeyboardEvent): boolean {
+        return e.key.toLowerCase() === 'c'
+            && e.shiftKey
+            && e.altKey
+            && (e.ctrlKey || e.metaKey);
+    }
+
+    private shouldHandleAddCommentHotkey(e: KeyboardEvent): boolean {
+        if (!this.selectedSvgNode || !this.canAddCommentToSelection()) return false;
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return true;
+        if (target.closest('.markmap-comment-textarea')) return false;
+        if (target.closest(`.${CSS_CLASSES.inlineEditor} textarea`)) return false;
+        return true;
+    }
+
+    canAddCommentToSelection(): boolean {
+        const node = this.getCurrentNodeForComment();
+        if (!node || !this.syncEngine) return false;
+
+        const nodeId = (node.payload as { nodeId?: string } | undefined)?.nodeId;
+        if (!nodeId) return false;
+
+        const mapping = this.syncEngine.getMappingManager().getMappingById(nodeId);
+        if (!mapping) return false;
+
+        return canAddCommentToNode(
+            mapping,
+            (from, to, id) => this.syncEngine!.getMappingManager().hasOtherNodeStartInRange(id, from, to)
+        );
+    }
+
+    async addCommentToSelectedNode(): Promise<void> {
+        const node = this.getCurrentNodeForComment();
+        if (!node) {
+            new Notice('Select a markmap node or place the cursor in a node first');
+            return;
+        }
+
+        this.selectNodeForComment(node);
+
+        const nodeId = (node.payload as { nodeId?: string } | undefined)?.nodeId;
+        if (!nodeId || !this.syncEngine || !this.renderer || !this.commentOverlay) return;
+
+        const mappingManager = this.syncEngine.getMappingManager();
+        const mapping = mappingManager.getMappingById(nodeId);
+        if (!mapping) return;
+
+        const hasOther = (from: number, to: number, id: string) =>
+            mappingManager.hasOtherNodeStartInRange(id, from, to);
+
+        if (!canAddCommentToNode(mapping, hasOther)) {
+            new Notice('Cannot add comment here: another node starts in this region');
+            return;
+        }
 
         const svg = this.renderer.getSvg();
         if (!svg) return;
 
-        const nodeElements = svg.querySelectorAll('.markmap-node');
+        const lines = mappingManager.getContentLines();
+        const existingSlot = computeCommentSlot(mapping, lines, hasOther);
+
+        if (existingSlot) {
+            this.commentOverlay.openCommentEditor(nodeId, existingSlot, svg);
+            return;
+        }
+
+        const editor = this.getMarkdownEditor();
+        if (!editor) {
+            new Notice('Open the Markdown editor for this file to add a comment');
+            return;
+        }
+
+        const fromLine = mapping.startLine + 1;
+        let slot: CommentSlotInfo;
+
+        if (fromLine > mapping.endLine) {
+            const titleCh = editor.getLine(mapping.startLine).length;
+            editor.replaceRange('\n', { line: mapping.startLine, ch: titleCh });
+            slot = {
+                nodeId,
+                fromLine,
+                toLine: fromLine,
+                text: '',
+                contentHash: `${fromLine}:${fromLine}:`,
+            };
+        } else {
+            slot = {
+                nodeId,
+                fromLine,
+                toLine: mapping.endLine,
+                text: lines.slice(fromLine, mapping.endLine + 1).join('\n'),
+                contentHash: `${fromLine}:${mapping.endLine}:`,
+            };
+        }
+
+        await this.updateMarkmapFromEditor(editor);
+
+        const refreshedMapping = mappingManager.getMappingById(nodeId);
+        const refreshedLines = mappingManager.getContentLines();
+        const refreshedSlot = refreshedMapping
+            ? computeCommentSlot(refreshedMapping, refreshedLines, hasOther) ?? slot
+            : slot;
+
+        this.commentOverlay.openCommentEditor(nodeId, refreshedSlot, svg);
+    }
+
+    /** Refresh line mappings from the editor after a comment save (markmap view is often active, so updateFromActiveFile would no-op). */
+    private onCommentEditFinished(): void {
+        const editor = this.getMarkdownEditor();
+        if (!editor || !this.syncEngine || !this.renderer) return;
+
+        const root = this.renderer.getCurrentRoot();
+        if (!root) return;
+
+        this.syncEngine.updateMappings(root, editor.getValue());
+        this.renderComments();
+    }
+
+    private scheduleRenderComments(): void {
+        this.commentRenderDebouncer.executeDebounced(() => this.renderComments());
+    }
+
+    private renderComments(): void {
+        if (!this.renderer || !this.syncEngine || !this.commentOverlay) return;
+
+        const svg = this.renderer.getSvg();
+        if (!svg) return;
+
         const mappingManager = this.syncEngine.getMappingManager();
         const lines = mappingManager.getContentLines();
 
-        if (!lines || lines.length === 0) return;
+        if (!lines.length) {
+            this.commentOverlay.sync(svg, new Map());
+            return;
+        }
 
-        nodeElements.forEach((nodeEl) => {
-            const nodeData = (nodeEl as any).__data__ as IPureNode | undefined;
-            const nodeId = nodeData?.payload?.nodeId as string | undefined;
-            if (!nodeId) return;
+        const index = buildCommentIndex(
+            mappingManager.getAllMappings(),
+            lines,
+            (from, to, id) => mappingManager.hasOtherNodeStartInRange(id, from, to)
+        );
 
-            const mapping = mappingManager.getMappingById(nodeId);
-            if (!mapping) return;
-
-            const commentText = lines.slice(mapping.startLine + 1, mapping.endLine).join('\n').trim();
-            const foreign = nodeEl.querySelector('.markmap-foreign');
-            if (!foreign) return;
-
-            let container = foreign.querySelector('.markmap-comment-container') as HTMLElement | null;
-
-            if (!commentText) {
-                if (container) {
-                    container.remove();
-                }
-                return;
-            }
-
-            if (!container) {
-                container = document.createElement('div');
-                container.className = 'markmap-comment-container';
-
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'markmap-comment-icon';
-                iconSpan.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`;
-
-                const popup = document.createElement('div');
-                popup.className = 'markmap-comment-popup';
-
-                // Stop events on the popup from propagating to Markmap
-                popup.addEventListener('click', (e) => e.stopPropagation());
-                popup.addEventListener('dblclick', (e) => e.stopPropagation());
-                popup.addEventListener('contextmenu', (e) => e.stopPropagation());
-                popup.addEventListener('mousedown', (e) => e.stopPropagation());
-                popup.addEventListener('wheel', (e) => e.stopPropagation());
-
-                container.appendChild(iconSpan);
-                container.appendChild(popup);
-                foreign.appendChild(container);
-            }
-
-            const popup = container.querySelector('.markmap-comment-popup') as HTMLElement;
-            
-            // Check if content has actually changed to avoid re-rendering markdown unnecessarily
-            const existingMarkdown = popup.dataset.markdown;
-            if (existingMarkdown !== commentText) {
-                popup.innerHTML = '';
-                popup.dataset.markdown = commentText;
-                MarkdownRenderer.renderMarkdown(commentText, popup, this.file?.path || '', this);
-            }
-        });
+        this.commentOverlay.sync(svg, index);
     }
 }

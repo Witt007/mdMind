@@ -1,0 +1,746 @@
+import { Editor, ItemView, MarkdownRenderer, Notice } from 'obsidian';
+import { IPureNode } from 'markmap-common';
+import { CSS_CLASSES } from '../constants';
+import { CommentSlotInfo } from '../utils/commentSlot';
+import { debounce } from '../utils/debounce';
+
+const COMMENT_ICON_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`;
+const SAVE_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+const CANCEL_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>`;
+const EDIT_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+const COMMENT_HEADING_PATTERN = /^\s{0,3}#{1,6}(?:\s|$)/m;
+const COMMENT_HEADING_REPLACE_PATTERN = /^(\s{0,3})#{1,6}(?:\s+|$)/gm;
+
+export interface CommentOverlayOptions {
+    popupLayer: HTMLElement;
+    getEditor: () => Editor | null;
+    getFilePath: () => string;
+    getView: () => ItemView;
+    onEditingChange: (isEditing: boolean, nodeId?: string) => void;
+    onAfterEdit: () => void;
+    isEditing: () => boolean;
+    getEditingNodeId: () => string | null;
+    getContentLines: () => string[];
+}
+
+interface PopupEntry {
+    popup: HTMLElement;
+    iconSpan: HTMLElement;
+    nodeEl: Element;
+}
+
+class CommentNodeController {
+    nodeId: string;
+    nodeEl: Element;
+    foreign: Element;
+    container: HTMLElement | null = null;
+    iconSpan: HTMLElement | null = null;
+
+    slot: CommentSlotInfo | null = null;
+    isHoveredNode = false;
+    isHoveredIcon = false;
+    isHoveredPopup = false;
+    isEditing = false;
+    hideTimer: ReturnType<typeof setTimeout> | null = null;
+    /** After save, keep popup hidden until the user hovers the icon or node again. */
+    private suppressPopupUntilHover = false;
+
+    private popupEntry: PopupEntry | null = null;
+
+    constructor(
+        nodeId: string,
+        nodeEl: Element,
+        foreign: Element,
+        private readonly overlay: CommentOverlay
+    ) {
+        this.nodeId = nodeId;
+        this.nodeEl = nodeEl;
+        this.foreign = foreign;
+    }
+
+    attachIfNeeded(): void {
+        if (this.container) return;
+
+        this.container = document.createElement('div');
+        this.container.className = 'markmap-comment-container';
+
+        this.iconSpan = document.createElement('span');
+        this.iconSpan.className = 'markmap-comment-icon';
+        this.iconSpan.innerHTML = COMMENT_ICON_SVG;
+        this.container.appendChild(this.iconSpan);
+        this.foreign.appendChild(this.container);
+
+        this.iconSpan.addEventListener('mouseenter', () => {
+            this.suppressPopupUntilHover = false;
+            this.isHoveredIcon = true;
+            this.clearHideTimer();
+            this.updatePopupDom();
+        });
+        this.iconSpan.addEventListener('mouseleave', () => {
+            this.isHoveredIcon = false;
+            this.delayHidePopup();
+        });
+
+    /*     this.nodeEl.addEventListener('mouseenter', () => {
+            this.suppressPopupUntilHover = false;
+            this.isHoveredNode = true;
+            this.clearHideTimer();
+            this.updatePopupDom();
+        });
+        this.nodeEl.addEventListener('mouseleave', () => {
+            this.isHoveredNode = false;
+            this.delayHidePopup();
+        }); */
+    }
+
+    removeIcon(): void {
+        if (this.container) {
+            this.container.remove();
+            this.container = null;
+            this.iconSpan = null;
+        }
+    }
+
+    /*  setSlot(slot: CommentSlotInfo | null): void {
+         this.slot = slot;
+     } */
+
+    /** Keep this.slot.text in sync with the editor (source of truth after edits). */
+    private refreshSlotFromEditor(): void {
+        const slot = this.slot;
+        if (!slot) return;
+
+        const editor = this.overlay.options.getEditor();
+        if (!editor) return;
+
+        const lines = editor.getValue().split('\n');
+        const from = slot.fromLine;
+        let to = slot.toLine;
+
+        if (from > to || from >= lines.length) {
+            slot.text = '';
+            slot.contentHash = `${from}:${to}:`;
+            return;
+        }
+
+        to = Math.min(to, lines.length - 1);
+        slot.toLine = to;
+        const text = lines.slice(from, to + 1).join('\n');
+        slot.text = text;
+        slot.contentHash = `${from}:${to}:${text}`;
+    }
+
+    syncSlot(slot: CommentSlotInfo): void {
+        const prior = this.slot;
+        const fromLine = prior?.nodeId === slot.nodeId ? prior.fromLine : slot.fromLine;
+        const toLine = prior?.nodeId === slot.nodeId ? prior.toLine : slot.toLine;
+
+        this.slot = { ...slot, fromLine, toLine };
+        this.refreshSlotFromEditor();
+        if (this.container && !this.foreign.contains(this.container)) {
+            this.container = null;
+            this.iconSpan = null;
+        }
+        this.attachIfNeeded();
+        this.updatePopupDom();
+    }
+
+    private clearHideTimer(): void {
+        if (this.hideTimer) {
+            clearTimeout(this.hideTimer);
+            this.hideTimer = null;
+        }
+    }
+
+    private isNodeSelected(): boolean {
+        return this.nodeEl.classList.contains(CSS_CLASSES.selectedNode)
+            || this.nodeEl.classList.contains(CSS_CLASSES.highlightedNode);
+    }
+
+    private shouldBeVisible(): boolean {
+        if (this.suppressPopupUntilHover && !this.isEditing) {
+            return false;
+        }
+        return this.isHoveredNode
+            || this.isHoveredIcon
+            || this.isHoveredPopup
+            || this.isNodeSelected()
+            || this.isEditing;
+    }
+
+    private dismissPopup(): void {
+        this.clearHideTimer();
+        const popup = this.getPopup();
+        if (!popup) return;
+        popup.removeClass('is-active');
+        popup.removeClass('is-editing');
+        this.overlay.unregisterVisiblePopup(popup);
+        popup.remove();
+        this.popupEntry = null;
+    }
+
+    private getPopup(): HTMLElement | null {
+        return this.overlay.getPopupForNode(this.nodeId);
+    }
+
+    private delayHidePopup(): void {
+        this.clearHideTimer();
+        // this.hideTimer = setTimeout(() => {  }, 300);
+        if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
+            const popup = this.getPopup();
+            if (popup) {
+                popup.removeClass('is-active');
+                this.hideTimer = setTimeout(() => {
+                    if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
+                        this.overlay.unregisterVisiblePopup(popup);
+                        popup.remove();
+                        this.popupEntry = null;
+                    }
+                }, 220);
+            }
+        }
+
+    }
+
+    private ensurePopup(): HTMLElement {
+        let popup = this.getPopup();
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.className = 'markmap-comment-popup';
+            popup.dataset.nodeId = this.nodeId;
+
+            popup.addEventListener('click', (e) => e.stopPropagation());
+            popup.addEventListener('dblclick', (e) => e.stopPropagation());
+            popup.addEventListener('contextmenu', (e) => e.stopPropagation());
+            popup.addEventListener('mousedown', (e) => e.stopPropagation());
+            popup.addEventListener('wheel', (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+
+            popup.addEventListener('mouseenter', () => {
+                this.isHoveredPopup = true;
+                this.clearHideTimer();
+                popup?.addClass('is-active');
+            });
+            popup.addEventListener('mouseleave', () => {
+                this.isHoveredPopup = false;
+                this.delayHidePopup();
+            });
+
+            this.overlay.getPopupLayer().appendChild(popup);
+        }
+
+        if (this.iconSpan) {
+            const entry: PopupEntry = { popup, iconSpan: this.iconSpan, nodeEl: this.nodeEl };
+
+            if (!this.popupEntry || this.popupEntry.popup !== popup) {
+                if (this.popupEntry) {
+                    this.overlay.unregisterVisiblePopup(this.popupEntry.popup);
+                }
+                this.popupEntry = entry;
+                this.overlay.registerVisiblePopup(entry);
+            } else {
+                this.popupEntry.nodeEl = this.nodeEl;
+            }
+        }
+
+        return popup;
+    }
+
+    private setupEditMode(popup: HTMLElement): void {
+        const slot = this.slot;
+        if (!slot) return;
+
+        const lines = this.overlay.options.getContentLines();
+        if (!lines.length) return;
+
+        this.isEditing = true;
+        this.overlay.options.onEditingChange(true, this.nodeId);
+        popup.innerHTML = '';
+        popup.addClass('is-editing');
+
+        const titleLine = slot.fromLine - 1;
+        const lineSlice = lines.slice(slot.fromLine, slot.toLine + 1).join('\n');
+        const initialRawText = lineSlice === slot.text ? lineSlice : slot.text;
+
+        let currentStartLine = slot.fromLine;
+        let currentEndLine = slot.toLine;
+        let hasNotifiedHeadingFilter = false;
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'markmap-comment-textarea';
+        textarea.value = initialRawText;
+        textarea.placeholder = 'Type comment (Markdown supported)...';
+        popup.appendChild(textarea);
+
+        const actions = document.createElement('div');
+        actions.className = 'markmap-comment-actions';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'markmap-comment-btn save';
+        saveBtn.innerHTML = SAVE_ICON_SVG;
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'markmap-comment-btn cancel';
+        cancelBtn.innerHTML = CANCEL_ICON_SVG;
+
+        actions.appendChild(saveBtn);
+        actions.appendChild(cancelBtn);
+        popup.appendChild(actions);
+
+        textarea.focus();
+
+        const adjustTextareaHeight = () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+        adjustTextareaHeight();
+        textarea.addEventListener('input', adjustTextareaHeight);
+
+        const applyToEditor = (val: string) => {
+            const editor = this.overlay.options.getEditor();
+            const activeSlot = this.slot;
+            if (!editor || !activeSlot) return;
+            if (COMMENT_HEADING_PATTERN.test(val)) {
+                if (!hasNotifiedHeadingFilter) {
+                    new Notice('Heading markers (# to ######) are removed from comments');
+                    hasNotifiedHeadingFilter = true;
+                }
+                val = val.replace(COMMENT_HEADING_REPLACE_PATTERN, '$1');
+                if (textarea.value !== val) {
+                    textarea.value = val;
+                    adjustTextareaHeight();
+                }
+            }
+
+            if (val.trim() === '') {
+                const lastLineText = editor.getLine(currentEndLine) || '';
+                if (currentEndLine >= currentStartLine) {
+                    const from = { line: titleLine, ch: editor.getLine(titleLine).length };
+                    const to = { line: currentEndLine, ch: lastLineText.length };
+                    editor.replaceRange('', from, to);
+                    currentEndLine = titleLine;
+                }
+                activeSlot.fromLine = currentStartLine;
+                activeSlot.toLine = currentEndLine;
+                activeSlot.text = '';
+                activeSlot.contentHash = `${currentStartLine}:${currentEndLine}:`;
+                return;
+            }
+
+            if (currentEndLine < currentStartLine) {
+                const startLineLen = editor.getLine(titleLine).length;
+                editor.replaceRange('\n' + val, { line: titleLine, ch: startLineLen });
+                currentStartLine = titleLine + 1;
+                const linesAdded = val.split('\n').length;
+                currentEndLine = currentStartLine + linesAdded - 1;
+            } else {
+                const lastLineText = editor.getLine(currentEndLine) || '';
+                editor.replaceRange(
+                    val,
+                    { line: currentStartLine, ch: 0 },
+                    { line: currentEndLine, ch: lastLineText.length }
+                );
+                const linesAdded = val.split('\n').length;
+                currentEndLine = currentStartLine + linesAdded - 1;
+            }
+
+            activeSlot.fromLine = currentStartLine;
+            activeSlot.toLine = currentEndLine;
+            activeSlot.text = val;
+            activeSlot.contentHash = `${currentStartLine}:${currentEndLine}:${val}`;
+        };
+
+        const debouncedApply = debounce((val: unknown) => applyToEditor(val as string), 60);
+
+        textarea.addEventListener('input', () => {
+            debouncedApply(textarea.value);
+        });
+
+        let closeIntent: 'save' | 'cancel' | null = null;
+        let blurCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const clearBlurCloseTimer = () => {
+            if (blurCloseTimer !== null) {
+                clearTimeout(blurCloseTimer);
+                blurCloseTimer = null;
+            }
+        };
+
+        const endEditSession = () => {
+            this.isEditing = false;
+            this.overlay.options.onEditingChange(false);
+        };
+
+        const exitEditMode = (apply: () => void, dismissAfter = false) => {
+            if (!this.overlay.options.isEditing()) return;
+            clearBlurCloseTimer();
+            closeIntent = null;
+            endEditSession();
+            apply();
+            this.refreshSlotFromEditor();
+            if (dismissAfter) {
+                this.suppressPopupUntilHover = true;
+                this.isHoveredPopup = false;
+            }
+            this.overlay.options.onAfterEdit();
+            if (dismissAfter) {
+                this.dismissPopup();
+            } else {
+                const popup = this.getPopup();
+                if (popup) {
+                    popup.removeClass('is-editing');
+                    popup.dataset.contentHash = '';
+                    popup.innerHTML = '';
+                }
+                this.updatePopupDom();
+            }
+        };
+
+        const commitAndClose = () => exitEditMode(() => applyToEditor(textarea.value), true);
+        const cancelAndClose = () => exitEditMode(() => applyToEditor(initialRawText), false);
+
+        saveBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            closeIntent = 'save';
+        });
+        cancelBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            closeIntent = 'cancel';
+        });
+        saveBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            commitAndClose();
+        });
+        cancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cancelAndClose();
+        });
+        textarea.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                commitAndClose();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelAndClose();
+            }
+        });
+        /*  textarea.addEventListener('blur', () => {
+             clearBlurCloseTimer();
+             blurCloseTimer = setTimeout(() => {
+                 blurCloseTimer = null;
+                 if (!this.overlay.options.isEditing()) return;
+                 if (closeIntent === 'cancel') {
+                     cancelAndClose();
+                 } else {
+                     commitAndClose();
+                 }
+                 closeIntent = null;
+             }, 150);
+         }); */
+    }
+
+    private renderPreview(popup: HTMLElement, slot: CommentSlotInfo): void {
+        if (popup.dataset.contentHash === slot.contentHash) return;
+
+        popup.removeClass('is-editing');
+        popup.innerHTML = '';
+        popup.dataset.contentHash = slot.contentHash;
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'markmap-comment-content';
+        popup.appendChild(contentDiv);
+        MarkdownRenderer.renderMarkdown(
+            slot.text,
+            contentDiv,
+            this.overlay.options.getFilePath(),
+            this.overlay.options.getView()
+        );
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'markmap-comment-edit-btn';
+        editBtn.innerHTML = EDIT_ICON_SVG;
+        popup.appendChild(editBtn);
+
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.isEditing = true;
+            this.updatePopupDom();
+        });
+        contentDiv.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.isEditing = true;
+            this.updatePopupDom();
+        });
+    }
+
+    updatePopupDom(): void {
+        const slot = this.slot;
+        if (!slot || !this.iconSpan) return;
+
+        const editingFromGlobal = this.overlay.options.isEditing()
+            && this.overlay.options.getEditingNodeId() === this.nodeId;
+        if (editingFromGlobal) {
+            this.isEditing = true;
+        }
+
+        const shouldBeVisible = this.shouldBeVisible();
+        let popup = this.getPopup();
+
+        if (shouldBeVisible) {
+            popup = this.ensurePopup();
+
+            if (this.isEditing) {
+                if (!popup.querySelector('.markmap-comment-textarea')) {
+                    this.setupEditMode(popup);
+                }
+            } else {
+                this.renderPreview(popup, slot);
+            }
+
+            requestAnimationFrame(() => {
+                const p = this.getPopup();
+                if (p) p.addClass('is-active');
+            });
+        } else if (popup && !this.isEditing) {
+            popup.removeClass('is-active');
+            const currentPopup = popup;
+            setTimeout(() => {
+                if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
+                    this.overlay.unregisterVisiblePopup(currentPopup);
+                    currentPopup.remove();
+                    this.popupEntry = null;
+                }
+            }, 220);
+        }
+    }
+
+    removePopupUnlessEditing(): void {
+        const popup = this.getPopup();
+        if (popup && !popup.classList.contains('is-editing')) {
+            this.overlay.unregisterVisiblePopup(popup);
+            popup.remove();
+            this.popupEntry = null;
+        }
+    }
+
+    beginEditing(slot: CommentSlotInfo): void {
+        this.slot = slot;
+        this.isEditing = true;
+        this.clearHideTimer();
+        if (this.container && !this.foreign.contains(this.container)) {
+            this.container = null;
+            this.iconSpan = null;
+        }
+        this.attachIfNeeded();
+        this.updatePopupDom();
+    }
+}
+
+export class CommentOverlay {
+    readonly options: CommentOverlayOptions;
+    private controllers = new Map<string, CommentNodeController>();
+    private visiblePopups = new Set<PopupEntry>();
+
+    constructor(options: CommentOverlayOptions) {
+        this.options = options;
+    }
+
+    getPopupLayer(): HTMLElement {
+        return this.options.popupLayer;
+    }
+
+    getPopupForNode(nodeId: string): HTMLElement | null {
+        return this.options.popupLayer.querySelector(
+            `.markmap-comment-popup[data-node-id="${CSS.escape(nodeId)}"]`
+        ) as HTMLElement | null;
+    }
+
+    registerVisiblePopup(entry: PopupEntry): void {
+        this.visiblePopups.add(entry);
+        this.repositionVisiblePopups();
+    }
+
+    unregisterVisiblePopup(popup: HTMLElement): void {
+        for (const entry of this.visiblePopups) {
+            if (entry.popup === popup) {
+                this.visiblePopups.delete(entry);
+                break;
+            }
+        }
+    }
+
+    repositionVisiblePopups(): void {
+        const layer = this.options.popupLayer;
+        const layerRect = layer.getBoundingClientRect();
+
+        for (const { popup, iconSpan, nodeEl } of this.visiblePopups) {
+            if (!popup.isConnected || !iconSpan.isConnected || !nodeEl.isConnected) continue;
+
+            const iconRect = iconSpan.getBoundingClientRect();
+            const nodeRect = nodeEl.getBoundingClientRect();
+
+            const margin = 8;
+            const gap = 10;
+            const availableW = Math.max(160, layerRect.width - margin * 2);
+            const availableH = Math.max(120, layerRect.height - margin * 2);
+
+            popup.style.maxWidth = `${Math.min(380, availableW)}px`;
+            popup.style.maxHeight = `${Math.min(280, availableH)}px`;
+            popup.style.minWidth = `${Math.min(260, availableW)}px`;
+            const popupW = popup.offsetWidth || 320;
+            const popupH = popup.offsetHeight || 200;
+
+           const iconCenterX = iconRect.left + iconRect.width / 2 - layerRect.left;
+            const nodeLeft = nodeRect.left - layerRect.left;
+            const nodeRight = nodeRect.right - layerRect.left;
+            const nodeTop = nodeRect.top - layerRect.top;
+            const nodeBottom = nodeRect.bottom - layerRect.top;
+            const nodeCenterY = nodeTop + nodeRect.height / 2;
+ 
+            const clampLeft = (left: number) => {
+                const minLeft = popupW / 2 + margin;
+                const maxLeft = layerRect.width - popupW / 2 - margin;
+                return Math.max(minLeft, Math.min(left, maxLeft));
+            };
+            const clampTop = (top: number) => Math.max(margin, Math.min(top, layerRect.height - popupH - margin));
+            const overlapArea = (left: number, top: number) => {
+                const popupLeft = left - popupW / 2;
+                const popupRight = popupLeft + popupW;
+                const popupBottom = top + popupH;
+                const overlapW = Math.max(0, Math.min(popupRight, nodeRight) - Math.max(popupLeft, nodeLeft));
+                const overlapH = Math.max(0, Math.min(popupBottom, nodeBottom) - Math.max(top, nodeTop));
+                return overlapW * overlapH;
+            };
+ 
+            const candidates = [
+                { left: iconCenterX, top: nodeBottom + gap },
+                { left: iconCenterX, top: nodeTop - popupH - gap },
+                { left: nodeRight + gap + popupW / 2, top: nodeCenterY - popupH / 2 },
+                { left: nodeLeft - gap - popupW / 2, top: nodeCenterY - popupH / 2 },
+                { left: layerRect.width / 2, top: margin },
+                { left: layerRect.width / 2, top: layerRect.height - popupH - margin },
+            ].map((candidate) => ({
+                left: clampLeft(candidate.left),
+                top: clampTop(candidate.top),
+            }));
+ 
+            const best = candidates.reduce((current, candidate) => {
+                return overlapArea(candidate.left, candidate.top) < overlapArea(current.left, current.top)
+                    ? candidate
+                    : current;
+            }, candidates[0]);
+ 
+            popup.style.left = `${best.left}px`;
+            popup.style.top = `${best.top}px`;
+        }
+    }
+
+    sync(svg: Element, index: Map<string, CommentSlotInfo>): void {
+        const layer = this.options.popupLayer;
+        const editingNodeId = this.options.getEditingNodeId();
+        const activeNodeIds = new Set<string>();
+
+        const nodeElements = svg.querySelectorAll('.markmap-node');
+
+        for (const nodeEl of Array.from(nodeElements)) {
+            const nodeData = (nodeEl as { __data__?: IPureNode }).__data__;
+            const nodeId = (nodeData?.payload as { nodeId?: string } | undefined)?.nodeId;
+            if (!nodeId) continue;
+
+            const slot = index.get(nodeId);
+            if (!slot) {
+                const controller = this.controllers.get(nodeId);
+                if (controller) {
+                    if (editingNodeId !== nodeId) {
+                        controller.removeIcon();
+                        controller.removePopupUnlessEditing();
+                        this.controllers.delete(nodeId);
+                    }
+                }
+                continue;
+            }
+
+            activeNodeIds.add(nodeId);
+
+            const foreign = nodeEl.querySelector('.markmap-foreign');
+            if (!foreign) continue;
+
+            let controller = this.controllers.get(nodeId);
+            if (!controller) {
+                controller = new CommentNodeController(nodeId, nodeEl, foreign, this);
+                this.controllers.set(nodeId, controller);
+            } else {
+                controller.nodeEl = nodeEl;
+                controller.foreign = foreign;
+            }
+
+            // Do not replace controller.slot while editing — applyToEditor must keep mutating this.slot.
+            if (editingNodeId === nodeId && this.options.isEditing()) {
+                continue;
+            }
+
+            controller.syncSlot(slot);
+        }
+
+        for (const [nodeId, controller] of this.controllers) {
+            if (!activeNodeIds.has(nodeId) && editingNodeId !== nodeId) {
+                controller.removeIcon();
+                controller.removePopupUnlessEditing();
+                this.controllers.delete(nodeId);
+            }
+        }
+
+        layer.querySelectorAll('.markmap-comment-popup').forEach((p) => {
+            const el = p as HTMLElement;
+            const nid = el.dataset.nodeId;
+            if (!nid || !activeNodeIds.has(nid)) {
+                if (!el.classList.contains('is-editing')) {
+                    this.unregisterVisiblePopup(el);
+                    el.remove();
+                }
+            }
+        });
+    }
+
+    openCommentEditor(nodeId: string, slot: CommentSlotInfo, svg: Element): boolean {
+        const nodeEl = this.findNodeElement(svg, nodeId);
+        if (!nodeEl) return false;
+
+        const foreign = nodeEl.querySelector('.markmap-foreign');
+        if (!foreign) return false;
+
+        let controller = this.controllers.get(nodeId);
+        if (!controller) {
+            controller = new CommentNodeController(nodeId, nodeEl, foreign, this);
+            this.controllers.set(nodeId, controller);
+        } else {
+            controller.nodeEl = nodeEl;
+            controller.foreign = foreign;
+        }
+
+        this.options.onEditingChange(true, nodeId);
+        controller.beginEditing(slot);
+        return true;
+    }
+
+    private findNodeElement(svg: Element, nodeId: string): Element | null {
+        for (const nodeEl of Array.from(svg.querySelectorAll('.markmap-node'))) {
+            const data = (nodeEl as { __data__?: IPureNode }).__data__;
+            const id = (data?.payload as { nodeId?: string } | undefined)?.nodeId;
+            if (id === nodeId) return nodeEl;
+        }
+        return null;
+    }
+
+    destroy(): void {
+        this.visiblePopups.clear();
+        for (const controller of this.controllers.values()) {
+            controller.removeIcon();
+            controller.removePopupUnlessEditing();
+        }
+        this.controllers.clear();
+        this.options.popupLayer.empty();
+    }
+}

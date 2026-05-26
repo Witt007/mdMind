@@ -12,6 +12,8 @@ export const CSS_CLASSES = {
     draggingNode: 'markmap-node-dragging',
     dropTarget: 'markmap-drop-target',
     inlineEditor: 'markmap-inline-editor',
+    commentPopup: 'markmap-comment-popup',
+    commentPopupLayer: 'markmap-comment-popup-layer',
 };
 
 export const EVENTS = {
