@@ -387,7 +387,12 @@ export class MarkmapRenderer {
         // which calls stopImmediatePropagation() and would otherwise swallow the event.
         // stopPropagation() here prevents d3-zoom from also zooming.
         this.container.addEventListener('wheel', (e) => {
-            if ((e.target as HTMLElement).closest(`.${CSS_CLASSES.inlineEditor}`)) {
+            const target = e.target as HTMLElement;
+            if (
+                target.closest(`.${CSS_CLASSES.inlineEditor}`)
+                || target.closest(`.${CSS_CLASSES.commentPopup}`)
+                || target.closest(`.${CSS_CLASSES.commentPopupLayer}`)
+            ) {
                 return;
             }
             e.preventDefault();
