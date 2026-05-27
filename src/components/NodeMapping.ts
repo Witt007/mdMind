@@ -7,6 +7,7 @@ export class NodeMappingManager {
     private lineMap: LineNodeMap = {};
     private contentLines: string[] = [];
     private normalizedLines: string[] = [];
+    private isNodeStartLine: boolean[] = [];
 
     private lastFoundLine = -1;
 
@@ -15,6 +16,7 @@ export class NodeMappingManager {
         this.lineMap = {};
         this.contentLines = markdown.split('\n');
         this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
+        this.isNodeStartLine = this.buildNodeStartLineIndex(this.contentLines);
         this.lastFoundLine = -1;
 
         this.processNode(root, 0, undefined);
@@ -47,6 +49,7 @@ export class NodeMappingManager {
     updateContent(markdown: string): void {
         this.contentLines = markdown.split('\n');
         this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
+        this.isNodeStartLine = this.buildNodeStartLineIndex(this.contentLines);
     }
 
     public getContentLines(): string[] {
@@ -58,6 +61,7 @@ export class NodeMappingManager {
         this.lineMap = {};
         this.contentLines = [];
         this.normalizedLines = [];
+        this.isNodeStartLine = [];
     }
 
     findNearestNode(line: number): NodeMappingInfo | undefined {
@@ -95,6 +99,19 @@ export class NodeMappingManager {
     // the purpose is just mapping the node to the line, so we can find the node by line number when we click on the line, and find the line number by node when we click on the node;
     private processNode(node: IPureNode, depth: number, parentId?: string): void {
         const content = this.extractTextContent(node.content);
+        const normalizedContent = this.normalizeLine(content);
+
+        // Markmap's root node is synthetic (its content is usually empty) and does not map to a markdown line.
+        // Mapping it would incorrectly match the first blank line in the document.
+        if (depth === 0 && !parentId && normalizedContent === '') {
+            if (node.children) {
+                for (const child of node.children) {
+                    this.processNode(child, depth + 1, undefined);
+                }
+            }
+            return;
+        }
+
         let startLine = this.findLineByContent(content, this.lastFoundLine + 1);
         console.info('from lastFoundLine',this.lastFoundLine+1,'\nreturned lastFoundLine:',startLine,'\ncontent:',content,'\nnormalines:',this.normalizedLines)
         //if (startLine === -1) return;//if (node.payload?.nodeId=="filenode"){startLine=0;}else
@@ -130,8 +147,12 @@ export class NodeMappingManager {
     public findLineByContent(content: string, startIndex: number = 0): number {
         const normalizedContent = this.normalizeLine(content);
 
+        // Empty content cannot be matched reliably in markdown (it would match any blank line).
+        if (normalizedContent === '') return -1;
+
         // Exact match
         for (let i = startIndex; i < this.normalizedLines.length; i++) {
+            if (!this.isNodeStartLine[i]) continue;
             if (this.normalizedLines[i] === normalizedContent) {
                 return i;
             } else console.log(`Line ${i} does not match. Expected: "${normalizedContent}", Actual: "${this.normalizedLines[i]}"`);
@@ -146,6 +167,28 @@ export class NodeMappingManager {
             }
         }*/
         return -1;
+    }
+
+    private buildNodeStartLineIndex(lines: string[]): boolean[] {
+        const isStart: boolean[] = new Array(lines.length).fill(false);
+        let inCodeBlock = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            if (line.startsWith('```')) {
+                inCodeBlock = !inCodeBlock;
+                continue;
+            }
+            if (inCodeBlock) continue;
+
+            // Only headings and list items represent nodes in the markmap structure.
+            const isHeading = /^#{1,6}\s/.test(line);
+            const isListItem = /^\s*(?:[-*+]|\d+\.)\s/.test(line);
+            isStart[i] = isHeading || isListItem;
+        }
+
+        return isStart;
     }
 
     private normalizeLine(line: string): string {

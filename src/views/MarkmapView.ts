@@ -262,8 +262,12 @@ export class MarkmapView extends ItemView {
         // Ctrl+Enter/Tab etc. on the markmap container when it has focus.
         this.markmapContainerEl && this.registerDomEvent(this.markmapContainerEl, 'keydown', (e: KeyboardEvent) => {
             if (this.app.workspace.getActiveViewOfType(MarkdownView)) return;// make sure it is not triggered in markdown mode;
+             e.preventDefault();
+            e.stopPropagation();
 
-            if (e.key === 'Enter') {
+            if (this.isAddCommentChord(e) || this.shouldHandleAddCommentHotkey(e)) {
+                void this.addCommentToSelectedNode();
+            }else if (e.key === 'Enter') {
                 this.handleEnterKey(e);
             } else if (e.key === 'Tab') {
                 this.handleTabKey(e);
@@ -275,16 +279,16 @@ export class MarkmapView extends ItemView {
             }
         }, { capture: false });
 
-        // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
+   /*      // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
         // but a markmap node is already selected in this view.
-        const cmScroller = document.querySelector('.cm-scroller') as HTMLElement | null;
+        const cmScroller = document.querySelector('.cm-contentContainer') as HTMLElement | null;
         cmScroller && this.registerDomEvent(cmScroller, 'keydown', (e: KeyboardEvent) => {
             if (!this.isAddCommentChord(e) || !this.shouldHandleAddCommentHotkey(e)) return;
             e.preventDefault();
             e.stopPropagation();
             void this.addCommentToSelectedNode();
         }, { capture: true });
-
+ */
         // Clear selection and highlight when clicking outside any markmap node
         const svgEle = this.renderer?.getSvg() as HTMLElement | null;
         svgEle && this.markmapContainerEl && this.registerDomEvent(svgEle, 'click', (e: MouseEvent) => {
@@ -301,11 +305,13 @@ export class MarkmapView extends ItemView {
             //else this.updateFromActiveFile();
         });
 
-        this.registerDomEvent(window, 'click', (e: MouseEvent) => {
+        const cmScroller = document.querySelector('.cm-contentContainer') as HTMLElement | null;
+        cmScroller &&  this.registerDomEvent(cmScroller, 'click', (e: MouseEvent) => {
             /* this.updateNode_deboucer.setWait(1);
              this.updateNode_deboucer.executeDebounced(()=>{
              });*/
-            if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
+            //if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
+
             this.updateFromActiveFile();
 
         }, { capture: true });
@@ -409,18 +415,18 @@ export class MarkmapView extends ItemView {
         return activeView?.editor === editor && this.file === activeView.file;
     }
 
-/*     private handleEditorChange(): void {
-        if (this.isEditingComment) return;
-        if (!this.syncEngine?.canSync()) return;
-
-        if (this.settings.syncMode === 'realtime') {
-            this.updateFromActiveFile();
-        } else if (this.settings.syncMode === 'debounce') {
-            this.debouncer.executeDebounced(() => {
+    /*     private handleEditorChange(): void {
+            if (this.isEditingComment) return;
+            if (!this.syncEngine?.canSync()) return;
+    
+            if (this.settings.syncMode === 'realtime') {
                 this.updateFromActiveFile();
-            });
-        }
-    } */
+            } else if (this.settings.syncMode === 'debounce') {
+                this.debouncer.executeDebounced(() => {
+                    this.updateFromActiveFile();
+                });
+            }
+        } */
 
     // focus on a specific node when clicking a markdown line
     private handleCursorActivity(editor = this.getMarkdownEditor(), callback: (node: IPureNode) => void): void {
@@ -443,6 +449,9 @@ export class MarkmapView extends ItemView {
         const result = await this.renderer.render(markdown, this.file?.basename);
 
         if (result) {
+           /*  if (!result.root.children.length) return this.showMessage(ERROR_MESSAGES.NO_NODES_FOUND), false;
+
+            this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
             this.renderComments();
             //this.handleCursorActivity(); //@TODO
@@ -504,7 +513,7 @@ export class MarkmapView extends ItemView {
         let currentEditor: Editor | null = null;
         // Try to get editor from active MarkdownView for bidirectional sync
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!activeView || this.app.workspace.getActiveViewOfType(MarkmapView)) return;
+        if (!activeView) return;
         if (activeView.file === activeFile) {
             currentEditor = activeView.editor;
         } else {
