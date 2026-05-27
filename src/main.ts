@@ -72,7 +72,9 @@ export default class MarkmapSyncPlugin extends Plugin {
         });
 
         this.app.workspace.onLayoutReady(() => {
-            this.initializeMarkmapView();
+            if (this.settings.openOnStartup) {
+                void this.initializeMarkmapView();
+            }
         });
     }
 

@@ -16,12 +16,27 @@ export class MarkmapSettingTab extends PluginSettingTab {
 
         containerEl.createEl('h2', {text: 'Markmap Sync Settings'});
 
+        this.addStartupSetting(containerEl);
         this.addSyncModeSetting(containerEl);
         this.addDebounceSetting(containerEl);
         this.addThemeSetting(containerEl);
         this.addExpandSettings(containerEl);
         this.addInteractionSettings(containerEl);
         this.addAppearanceSettings(containerEl);
+    }
+
+    private addStartupSetting(containerEl: HTMLElement): void {
+        new Setting(containerEl)
+            .setName('Open on startup')
+            .setDesc('Automatically open the Markmap sidebar when Obsidian starts')
+            .addToggle((toggle: ToggleComponent) => {
+                toggle
+                    .setValue(this.plugin.settings.openOnStartup)
+                    .onChange(async (value) => {
+                        this.plugin.settings.openOnStartup = value;
+                        await this.plugin.saveSettings();
+                    });
+            });
     }
 
     private addSyncModeSetting(containerEl: HTMLElement): void {

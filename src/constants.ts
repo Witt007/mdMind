@@ -47,4 +47,5 @@ export const ERROR_MESSAGES = {
     PARSE_ERROR: 'Failed to parse Markdown content',
     SYNC_ERROR: 'Synchronization failed',
     RENDER_ERROR: 'Failed to render mindmap',
+    NO_NODES_FOUND: 'No nodes found in the mindmap',
 };

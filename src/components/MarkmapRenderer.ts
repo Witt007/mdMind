@@ -167,6 +167,7 @@ export class MarkmapRenderer {
 
     async render(markdown: string, filename?: string): Promise<ITransformResult | null> {
         try {
+            
             const result = this.transformer.transform(markdown);
 
             let rootNode: IPureNode = result.root;

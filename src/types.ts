@@ -1,6 +1,7 @@
 import {IPureNode} from 'markmap-common';
 
 export interface MarkmapSettings {
+    openOnStartup: boolean;
     syncMode: 'realtime' | 'manual' | 'debounce';
     debounceMs: number;
     autoExpand: boolean;
@@ -14,6 +15,7 @@ export interface MarkmapSettings {
 }
 
 export const DEFAULT_SETTINGS: MarkmapSettings = {
+    openOnStartup: false,
     syncMode: 'debounce',
     debounceMs: 300,
     autoExpand: true,
