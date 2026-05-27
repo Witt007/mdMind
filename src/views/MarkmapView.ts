@@ -265,7 +265,7 @@ export class MarkmapView extends ItemView {
              e.preventDefault();
             e.stopPropagation();
 
-            if (this.isAddCommentChord(e) || this.shouldHandleAddCommentHotkey(e)) {
+            if (this.isAddCommentChord(e) && this.shouldHandleAddCommentHotkey(e)) {
                 void this.addCommentToSelectedNode();
             }else if (e.key === 'Enter') {
                 this.handleEnterKey(e);
@@ -305,13 +305,13 @@ export class MarkmapView extends ItemView {
             //else this.updateFromActiveFile();
         });
 
-        const cmScroller = document.querySelector('.cm-contentContainer') as HTMLElement | null;
-        cmScroller &&  this.registerDomEvent(cmScroller, 'click', (e: MouseEvent) => {
+         this.registerDomEvent(window, 'click', (e: MouseEvent) => {
             /* this.updateNode_deboucer.setWait(1);
              this.updateNode_deboucer.executeDebounced(()=>{
              });*/
             //if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
 
+            if((e.target as Element).closest('.cm-contentContainer'))
             this.updateFromActiveFile();
 
         }, { capture: true });
