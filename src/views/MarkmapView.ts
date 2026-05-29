@@ -224,6 +224,7 @@ export class MarkmapView extends ItemView {
                     this.updateEditorPosition();
                 }
                 this.commentOverlay?.repositionVisiblePopups();
+
             },
             onUpdate: () => this.scheduleRenderComments()
         });
@@ -262,12 +263,12 @@ export class MarkmapView extends ItemView {
         // Ctrl+Enter/Tab etc. on the markmap container when it has focus.
         this.markmapContainerEl && this.registerDomEvent(this.markmapContainerEl, 'keydown', (e: KeyboardEvent) => {
             if (this.app.workspace.getActiveViewOfType(MarkdownView)) return;// make sure it is not triggered in markdown mode;
-             e.preventDefault();
+            e.preventDefault();
             e.stopPropagation();
 
             if (this.isAddCommentChord(e) && this.shouldHandleAddCommentHotkey(e)) {
                 void this.addCommentToSelectedNode();
-            }else if (e.key === 'Enter') {
+            } else if (e.key === 'Enter') {
                 this.handleEnterKey(e);
             } else if (e.key === 'Tab') {
                 this.handleTabKey(e);
@@ -279,16 +280,16 @@ export class MarkmapView extends ItemView {
             }
         }, { capture: false });
 
-   /*      // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
-        // but a markmap node is already selected in this view.
-        const cmScroller = document.querySelector('.cm-contentContainer') as HTMLElement | null;
-        cmScroller && this.registerDomEvent(cmScroller, 'keydown', (e: KeyboardEvent) => {
-            if (!this.isAddCommentChord(e) || !this.shouldHandleAddCommentHotkey(e)) return;
-            e.preventDefault();
-            e.stopPropagation();
-            void this.addCommentToSelectedNode();
-        }, { capture: true });
- */
+        /*      // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
+             // but a markmap node is already selected in this view.
+             const cmScroller = document.querySelector('.cm-contentContainer') as HTMLElement | null;
+             cmScroller && this.registerDomEvent(cmScroller, 'keydown', (e: KeyboardEvent) => {
+                 if (!this.isAddCommentChord(e) || !this.shouldHandleAddCommentHotkey(e)) return;
+                 e.preventDefault();
+                 e.stopPropagation();
+                 void this.addCommentToSelectedNode();
+             }, { capture: true });
+      */
         // Clear selection and highlight when clicking outside any markmap node
         const svgEle = this.renderer?.getSvg() as HTMLElement | null;
         svgEle && this.markmapContainerEl && this.registerDomEvent(svgEle, 'click', (e: MouseEvent) => {
@@ -305,14 +306,14 @@ export class MarkmapView extends ItemView {
             //else this.updateFromActiveFile();
         });
 
-         this.registerDomEvent(window, 'click', (e: MouseEvent) => {
+        this.registerDomEvent(window, 'click', (e: MouseEvent) => {
             /* this.updateNode_deboucer.setWait(1);
              this.updateNode_deboucer.executeDebounced(()=>{
              });*/
             //if ((e.target as Element)?.closest('.markmap-comment-popup')) return;
 
-            if((e.target as Element).closest('.cm-contentContainer'))
-            this.updateFromActiveFile();
+            if ((e.target as Element).closest('.cm-contentContainer'))
+                this.updateFromActiveFile();
 
         }, { capture: true });
 
@@ -449,9 +450,9 @@ export class MarkmapView extends ItemView {
         const result = await this.renderer.render(markdown, this.file?.basename);
 
         if (result) {
-           /*  if (!result.root.children.length) return this.showMessage(ERROR_MESSAGES.NO_NODES_FOUND), false;
-
-            this.hideMessage(); */
+            /*  if (!result.root.children.length) return this.showMessage(ERROR_MESSAGES.NO_NODES_FOUND), false;
+ 
+             this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
             this.renderComments();
             //this.handleCursorActivity(); //@TODO

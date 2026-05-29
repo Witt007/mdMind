@@ -121,19 +121,19 @@
     position: absolute;
     z-index: 100;
     pointer-events: auto;
-    
+
     /* Chat input box dimensions */
     min-width: 320px;
     max-width: 600px;
     min-height: 44px;
     max-height: 320px;
-    
+
     /* Clean modern look */
     border-radius: 12px;
     border: 1px solid var(--divider-color);
     background-color: var(--background-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-    
+
     /* Layout container */
     display: flex;
     flex-direction: column;
@@ -149,14 +149,14 @@
     resize: none;
     overflow-y: auto;
     overflow-x: hidden;
-    
+
     /* Spacing and typography */
     padding: 12px 16px;
     font-family: inherit;
     font-size: 14px;
     line-height: 1.5;
     color: var(--text-normal);
-    
+
     /* Smooth transitions */
     transition: background-color 0.2s ease;
 }
@@ -585,60 +585,60 @@
     left: 0;
     top: 0;
     transform: translate(-50%, 4px);
-    
+
     min-width: 260px;
     max-width: 380px;
     max-height: 280px;
     overflow-y: auto;
-    
+
     box-sizing: border-box;
- 
+
     padding: 12px 16px;
     border-radius: 10px;
-    
+
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    
-    transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1), 
-                transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), 
-                visibility 0.22s;
-    
+
+    transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0.22s;
+
     z-index: 1000;
-    
+
     /* Premium Typography & Spacing */
     font-family: var(--font-interface);
     font-size: 13px;
     line-height: 1.5;
     white-space: normal;
     text-align: left;
-    
+
     background: var(--background-floating, var(--background-primary)) !important;
     border: 1px solid var(--background-modifier-border) !important;
     color: var(--text-normal) !important;
-    
-                 backdrop-filter: blur(10px) saturate(145%) !important;
+
+    backdrop-filter: blur(10px) saturate(145%) !important;
     -webkit-backdrop-filter: blur(10px) saturate(145%) !important;
- 
+
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26),
-                0 6px 18px rgba(0, 0, 0, 0.16),
-                0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+        0 6px 18px rgba(0, 0, 0, 0.16),
+        0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
 body.theme-light .markmap-comment-popup {
     background: color-mix(in srgb, var(--background-floating, var(--background-primary)) 96%, white) !important;
     border-color: color-mix(in srgb, var(--background-modifier-border) 72%, var(--text-muted)) !important;
     box-shadow: 0 18px 42px rgba(31, 35, 40, 0.18),
-                0 5px 16px rgba(31, 35, 40, 0.12),
-                0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+        0 5px 16px rgba(31, 35, 40, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
 }
- 
+
 body.theme-dark .markmap-comment-popup {
     background: color-mix(in srgb, var(--background-floating, var(--background-primary)) 92%, black) !important;
     border-color: color-mix(in srgb, var(--background-modifier-border) 72%, var(--text-muted)) !important;
     box-shadow: 0 22px 54px rgba(0, 0, 0, 0.48),
-                0 7px 22px rgba(0, 0, 0, 0.34),
-                0 0 0 1px rgba(255, 255, 255, 0.07) inset;
+        0 7px 22px rgba(0, 0, 0, 0.34),
+        0 0 0 1px rgba(255, 255, 255, 0.07) inset;
 }
 
 /* Gap-bridging pseudo-element so mouse hover is not lost between icon and popup */
@@ -656,13 +656,16 @@ body.theme-dark .markmap-comment-popup {
     width: 4px;
     height: 4px;
 }
+
 .markmap-comment-popup::-webkit-scrollbar-track {
     background: transparent;
 }
+
 .markmap-comment-popup::-webkit-scrollbar-thumb {
     background: var(--text-muted);
     border-radius: 2px;
 }
+
 .markmap-comment-popup::-webkit-scrollbar-thumb:hover {
     background: var(--text-normal);
 }
@@ -671,17 +674,21 @@ body.theme-dark .markmap-comment-popup {
 .markmap-comment-popup p {
     margin: 0 0 8px 0;
 }
+
 .markmap-comment-popup p:last-child {
     margin-bottom: 0;
 }
-.markmap-comment-popup ul, 
+
+.markmap-comment-popup ul,
 .markmap-comment-popup ol {
     margin: 0 0 8px 0;
     padding-left: 18px;
 }
+
 .markmap-comment-popup li {
     margin-bottom: 4px;
 }
+
 .markmap-comment-popup code {
     font-family: var(--font-mono);
     background: var(--code-background);
@@ -721,7 +728,7 @@ body.theme-dark .markmap-comment-popup {
 .markmap-comment-textarea {
     width: 100%;
     min-height: 80px;
-       max-height: min(180px, calc(100vh - 180px));
+    max-height: min(180px, calc(100vh - 180px));
     box-sizing: border-box;
     background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);

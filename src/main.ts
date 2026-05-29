@@ -57,7 +57,7 @@ export default class MarkmapSyncPlugin extends Plugin {
         });
 
         this.addCommand({
-            id: 'markmap-add-comment',
+            id: 'add-comment-to-markmap',
             name: 'Add comment to selected markmap node',
             checkCallback: (checking) => {
                 const view = this.currentMarkmapView;
