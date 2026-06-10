@@ -1,8 +1,8 @@
-import {Notice, Plugin, TFile, WorkspaceLeaf} from 'obsidian';
-import {MarkmapView} from './views/MarkmapView';
-import {MarkmapSettingTab} from './settings';
-import {DEFAULT_SETTINGS, MarkmapSettings} from './types';
-import {VIEW_TYPE_MARKMAP} from './constants';
+import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { MarkmapView } from './views/MarkmapView';
+import { MarkmapSettingTab } from './settings';
+import { DEFAULT_SETTINGS, MarkmapSettings } from './types';
+import { VIEW_TYPE_MARKMAP } from './constants';
 
 export default class MarkmapSyncPlugin extends Plugin {
     settings!: MarkmapSettings;
@@ -61,7 +61,7 @@ export default class MarkmapSyncPlugin extends Plugin {
             name: 'Add comment to selected markmap node',
             checkCallback: (checking) => {
                 const view = this.currentMarkmapView;
-                if (!view || !view.canAddCommentToSelection()) {
+                if (!view || !view.shouldHandleAddCommentHotkey()) {
                     return false;
                 }
                 if (!checking) {
@@ -116,7 +116,7 @@ export default class MarkmapSyncPlugin extends Plugin {
     }
 
     private async openMarkmapView(): Promise<void> {
-        const {workspace} = this.app;
+        const { workspace } = this.app;
 
         const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_MARKMAP);
         if (existingLeaves.length > 0) {
@@ -132,7 +132,7 @@ export default class MarkmapSyncPlugin extends Plugin {
     }
 
     private async toggleMarkmapSidebar(): Promise<void> {
-        const {workspace} = this.app;
+        const { workspace } = this.app;
         const leaves = workspace.getLeavesOfType(VIEW_TYPE_MARKMAP);
 
         if (leaves.length > 0) {

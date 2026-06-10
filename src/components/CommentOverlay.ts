@@ -37,7 +37,6 @@ class CommentNodeController {
     iconSpan: HTMLElement | null = null;
 
     slot: CommentSlotInfo | null = null;
-    isHoveredNode = false;
     isHoveredIcon = false;
     isHoveredPopup = false;
     isEditing = false;
@@ -81,16 +80,16 @@ class CommentNodeController {
             this.delayHidePopup();
         });
 
-    /*     this.nodeEl.addEventListener('mouseenter', () => {
-            this.suppressPopupUntilHover = false;
-            this.isHoveredNode = true;
-            this.clearHideTimer();
-            this.updatePopupDom();
-        });
-        this.nodeEl.addEventListener('mouseleave', () => {
-            this.isHoveredNode = false;
-            this.delayHidePopup();
-        }); */
+        /*     this.nodeEl.addEventListener('mouseenter', () => {
+                this.suppressPopupUntilHover = false;
+                this.isHoveredNode = true;
+                this.clearHideTimer();
+                this.updatePopupDom();
+            });
+            this.nodeEl.addEventListener('mouseleave', () => {
+                this.isHoveredNode = false;
+                this.delayHidePopup();
+            }); */
     }
 
     removeIcon(): void {
@@ -131,11 +130,8 @@ class CommentNodeController {
     }
 
     syncSlot(slot: CommentSlotInfo): void {
-        const prior = this.slot;
-        const fromLine = prior?.nodeId === slot.nodeId ? prior.fromLine : slot.fromLine;
-        const toLine = prior?.nodeId === slot.nodeId ? prior.toLine : slot.toLine;
-
-        this.slot = { ...slot, fromLine, toLine };
+        this.slot = slot;
+        if (!slot.text.trim()) return;
         this.refreshSlotFromEditor();
         if (this.container && !this.foreign.contains(this.container)) {
             this.container = null;
@@ -161,8 +157,10 @@ class CommentNodeController {
         if (this.suppressPopupUntilHover && !this.isEditing) {
             return false;
         }
-        return this.isHoveredNode
-            || this.isHoveredIcon
+        if (!this.isEditing && (!this.slot || !this.slot.text.trim())) {
+            return false;
+        }
+        return this.isHoveredIcon
             || this.isHoveredPopup
             || this.isNodeSelected()
             || this.isEditing;
@@ -186,12 +184,12 @@ class CommentNodeController {
     private delayHidePopup(): void {
         this.clearHideTimer();
         // this.hideTimer = setTimeout(() => {  }, 300);
-        if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
+        if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isNodeSelected()) {
             const popup = this.getPopup();
             if (popup) {
                 popup.removeClass('is-active');
                 this.hideTimer = setTimeout(() => {
-                    if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
+                    if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isNodeSelected()) {
                         this.overlay.unregisterVisiblePopup(popup);
                         popup.remove();
                         this.popupEntry = null;
@@ -217,7 +215,7 @@ class CommentNodeController {
                 e.stopPropagation();
             }, { passive: true });
 
-            popup.addEventListener('mouseenter', () => {
+            /*popup.addEventListener('mouseenter', () => {
                 this.isHoveredPopup = true;
                 this.clearHideTimer();
                 popup?.addClass('is-active');
@@ -225,7 +223,7 @@ class CommentNodeController {
             popup.addEventListener('mouseleave', () => {
                 this.isHoveredPopup = false;
                 this.delayHidePopup();
-            });
+            });*/
 
             this.overlay.getPopupLayer().appendChild(popup);
         }
@@ -259,9 +257,7 @@ class CommentNodeController {
         popup.innerHTML = '';
         popup.addClass('is-editing');
 
-        const titleLine = slot.fromLine - 1;
-        const lineSlice = lines.slice(slot.fromLine, slot.toLine + 1).join('\n');
-        const initialRawText = lineSlice === slot.text ? lineSlice : slot.text;
+        const initialRawText = slot.text;
 
         let currentStartLine = slot.fromLine;
         let currentEndLine = slot.toLine;
@@ -290,12 +286,12 @@ class CommentNodeController {
 
         textarea.focus();
 
-        const adjustTextareaHeight = () => {
-            textarea.style.height = 'auto';
-            textarea.style.height = `${textarea.scrollHeight}px`;
-        };
-        adjustTextareaHeight();
-        textarea.addEventListener('input', adjustTextareaHeight);
+        /*  const adjustTextareaHeight = () => {
+             //textarea.style.height = 'auto';
+             textarea.style.height = `${textarea.scrollHeight}px`;
+         };
+         adjustTextareaHeight();
+         textarea.addEventListener('input', adjustTextareaHeight); */
 
         const applyToEditor = (val: string) => {
             const editor = this.overlay.options.getEditor();
@@ -309,63 +305,25 @@ class CommentNodeController {
                 val = val.replace(COMMENT_HEADING_REPLACE_PATTERN, '$1');
                 if (textarea.value !== val) {
                     textarea.value = val;
-                    adjustTextareaHeight();
+                    // adjustTextareaHeight();
                 }
             }
 
-            if (val.trim() === '') {
-                const lastLineText = editor.getLine(currentEndLine) || '';
-                if (currentEndLine >= currentStartLine) {
-                    const from = { line: titleLine, ch: editor.getLine(titleLine).length };
-                    const to = { line: currentEndLine, ch: lastLineText.length };
-                    editor.replaceRange('', from, to);
-                    currentEndLine = titleLine;
-                }
-                activeSlot.fromLine = currentStartLine;
-                activeSlot.toLine = currentEndLine;
-                activeSlot.text = '';
-                activeSlot.contentHash = `${currentStartLine}:${currentEndLine}:`;
-                return;
-            }
-
-            if (currentEndLine < currentStartLine) {
-                const startLineLen = editor.getLine(titleLine).length;
-                editor.replaceRange('\n' + val, { line: titleLine, ch: startLineLen });
-                currentStartLine = titleLine + 1;
-                const linesAdded = val.split('\n').length;
-                currentEndLine = currentStartLine + linesAdded - 1;
+            const lastLineText = editor.getLine(currentEndLine) || '';
+            if (currentEndLine >= currentStartLine) {
+                const from = { line: currentStartLine, ch: 0 };
+                const to = { line: currentEndLine, ch: lastLineText.length };
+                editor.replaceRange('', from, to);
             } else {
-                const lastLineText = editor.getLine(currentEndLine) || '';
-                editor.replaceRange(
-                    val,
-                    { line: currentStartLine, ch: 0 },
-                    { line: currentEndLine, ch: lastLineText.length }
-                );
-                const linesAdded = val.split('\n').length;
-                currentEndLine = currentStartLine + linesAdded - 1;
+                editor.replaceRange('\n' + val, { line: currentEndLine, ch: 0 }, { line: currentEndLine, ch: 0 });
             }
-
-            activeSlot.fromLine = currentStartLine;
-            activeSlot.toLine = currentEndLine;
-            activeSlot.text = val;
-            activeSlot.contentHash = `${currentStartLine}:${currentEndLine}:${val}`;
         };
 
         const debouncedApply = debounce((val: unknown) => applyToEditor(val as string), 60);
 
         textarea.addEventListener('input', () => {
-            debouncedApply(textarea.value);
+            applyToEditor(textarea.value);
         });
-
-        let closeIntent: 'save' | 'cancel' | null = null;
-        let blurCloseTimer: ReturnType<typeof setTimeout> | null = null;
-
-        const clearBlurCloseTimer = () => {
-            if (blurCloseTimer !== null) {
-                clearTimeout(blurCloseTimer);
-                blurCloseTimer = null;
-            }
-        };
 
         const endEditSession = () => {
             this.isEditing = false;
@@ -374,17 +332,13 @@ class CommentNodeController {
 
         const exitEditMode = (apply: () => void, dismissAfter = false) => {
             if (!this.overlay.options.isEditing()) return;
-            clearBlurCloseTimer();
-            closeIntent = null;
             endEditSession();
             apply();
-            this.refreshSlotFromEditor();
+            //this.refreshSlotFromEditor();
+            this.overlay.options.onAfterEdit();
             if (dismissAfter) {
                 this.suppressPopupUntilHover = true;
                 this.isHoveredPopup = false;
-            }
-            this.overlay.options.onAfterEdit();
-            if (dismissAfter) {
                 this.dismissPopup();
             } else {
                 const popup = this.getPopup();
@@ -393,7 +347,7 @@ class CommentNodeController {
                     popup.dataset.contentHash = '';
                     popup.innerHTML = '';
                 }
-                this.updatePopupDom();
+                // this.updatePopupDom();
             }
         };
 
@@ -402,11 +356,9 @@ class CommentNodeController {
 
         saveBtn.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            closeIntent = 'save';
         });
         cancelBtn.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            closeIntent = 'cancel';
         });
         saveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -503,16 +455,26 @@ class CommentNodeController {
                 const p = this.getPopup();
                 if (p) p.addClass('is-active');
             });
-        } else if (popup && !this.isEditing) {
-            popup.removeClass('is-active');
-            const currentPopup = popup;
-            setTimeout(() => {
-                if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isHoveredNode && !this.isNodeSelected()) {
-                    this.overlay.unregisterVisiblePopup(currentPopup);
-                    currentPopup.remove();
+        } else {
+            const hasText = !!slot?.text?.trim();
+            if (!hasText && !this.isEditing) {
+                if (popup) {
+                    //controller.removeIcon();
+                    this.overlay.unregisterVisiblePopup(popup);
+                    popup.remove();
                     this.popupEntry = null;
                 }
-            }, 220);
+            } else if (popup && !this.isEditing) {
+                popup.removeClass('is-active');
+                const currentPopup = popup;
+                setTimeout(() => {
+                    if (!this.isEditing && !this.isHoveredIcon && !this.isHoveredPopup && !this.isNodeSelected()) {
+                        this.overlay.unregisterVisiblePopup(currentPopup);
+                        currentPopup.remove();
+                        this.popupEntry = null;
+                    }
+                }, 220);
+            }
         }
     }
 
@@ -563,6 +525,7 @@ export class CommentOverlay {
     }
 
     unregisterVisiblePopup(popup: HTMLElement): void {
+        this.lastChosenDirection.delete(popup);
         for (const entry of this.visiblePopups) {
             if (entry.popup === popup) {
                 this.visiblePopups.delete(entry);
@@ -571,71 +534,200 @@ export class CommentOverlay {
         }
     }
 
+    /** Per-popup memory of the last chosen candidate index to enable sticky direction. */
+    private lastChosenDirection = new Map<HTMLElement, number>();
+
     repositionVisiblePopups(): void {
         const layer = this.options.popupLayer;
         const layerRect = layer.getBoundingClientRect();
+        if (layerRect.width === 0 || layerRect.height === 0) return;
 
-        for (const { popup, iconSpan, nodeEl } of this.visiblePopups) {
-            if (!popup.isConnected || !iconSpan.isConnected || !nodeEl.isConnected) continue;
+        // Design constants
+        const GAP = 8;               // gap between node/children and popup
+        const MIN_W = 200;
+        const MIN_H = 80;
+        const MAX_W = 380;
+        const MAX_H = 320;
+        const HYSTERESIS = 0.25;     // current direction keeps unless new one is 25% bigger
 
-            const iconRect = iconSpan.getBoundingClientRect();
+        for (const entry of this.visiblePopups) {
+            const { popup, nodeEl } = entry;
+
+            // ── 1. Compute the exclusion zone (node + visible children) ──
+
             const nodeRect = nodeEl.getBoundingClientRect();
+            // Start with the node itself
+            let exLeft = nodeRect.left;
+            let exTop = nodeRect.top;
+            let exRight = nodeRect.right;
+            let exBottom = nodeRect.bottom;
 
-            const margin = 8;
-            const gap = 10;
-            const availableW = Math.max(160, layerRect.width - margin * 2);
-            const availableH = Math.max(120, layerRect.height - margin * 2);
+            // Expand to include direct children bounding boxes
+            const nodeData = (nodeEl as { __data__?: IPureNode }).__data__;
+            if (nodeData?.children?.length) {
+                const svg = nodeEl.closest('svg');
+                if (svg) {
+                    for (const child of nodeData.children) {
+                        const childNodeId = (child.payload as { nodeId?: string } | undefined)?.nodeId;
+                        if (!childNodeId) continue;
+                        // Find the child SVG element
+                        for (const el of Array.from(svg.querySelectorAll('.markmap-node'))) {
+                            const d = (el as { __data__?: IPureNode }).__data__;
+                            const id = (d?.payload as { nodeId?: string } | undefined)?.nodeId;
+                            if (id === childNodeId) {
+                                const cr = el.getBoundingClientRect();
+                                exLeft = Math.min(exLeft, cr.left);
+                                exTop = Math.min(exTop, cr.top);
+                                exRight = Math.max(exRight, cr.right);
+                                exBottom = Math.max(exBottom, cr.bottom);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
-            popup.style.maxWidth = `${Math.min(380, availableW)}px`;
-            popup.style.maxHeight = `${Math.min(280, availableH)}px`;
-            popup.style.minWidth = `${Math.min(260, availableW)}px`;
-            const popupW = popup.offsetWidth || 320;
-            const popupH = popup.offsetHeight || 200;
+            // Convert exclusion zone to layer-local coordinates
+            const exL = exLeft - layerRect.left;
+            const exT = exTop - layerRect.top;
+            const exR = exRight - layerRect.left;
+            const exB = exBottom - layerRect.top;
 
-           const iconCenterX = iconRect.left + iconRect.width / 2 - layerRect.left;
-            const nodeLeft = nodeRect.left - layerRect.left;
-            const nodeRight = nodeRect.right - layerRect.left;
-            const nodeTop = nodeRect.top - layerRect.top;
-            const nodeBottom = nodeRect.bottom - layerRect.top;
-            const nodeCenterY = nodeTop + nodeRect.height / 2;
- 
-            const clampLeft = (left: number) => {
-                const minLeft = popupW / 2 + margin;
-                const maxLeft = layerRect.width - popupW / 2 - margin;
-                return Math.max(minLeft, Math.min(left, maxLeft));
-            };
-            const clampTop = (top: number) => Math.max(margin, Math.min(top, layerRect.height - popupH - margin));
-            const overlapArea = (left: number, top: number) => {
-                const popupLeft = left - popupW / 2;
-                const popupRight = popupLeft + popupW;
-                const popupBottom = top + popupH;
-                const overlapW = Math.max(0, Math.min(popupRight, nodeRight) - Math.max(popupLeft, nodeLeft));
-                const overlapH = Math.max(0, Math.min(popupBottom, nodeBottom) - Math.max(top, nodeTop));
-                return overlapW * overlapH;
-            };
- 
-            const candidates = [
-                { left: iconCenterX, top: nodeBottom + gap },
-                { left: iconCenterX, top: nodeTop - popupH - gap },
-                { left: nodeRight + gap + popupW / 2, top: nodeCenterY - popupH / 2 },
-                { left: nodeLeft - gap - popupW / 2, top: nodeCenterY - popupH / 2 },
-                { left: layerRect.width / 2, top: margin },
-                { left: layerRect.width / 2, top: layerRect.height - popupH - margin },
-            ].map((candidate) => ({
-                left: clampLeft(candidate.left),
-                top: clampTop(candidate.top),
+            const layerW = layerRect.width;
+            const layerH = layerRect.height;
+
+            // Node center in layer coords (for vertical/horizontal centering)
+            const nodeCX = (nodeRect.left + nodeRect.right) / 2 - layerRect.left;
+            const nodeCY = (nodeRect.top + nodeRect.bottom) / 2 - layerRect.top;
+
+            // ── 2. Build 4 candidate placement regions ──
+            // Each candidate: { dir index, available width, available height, x, y }
+
+            interface Candidate {
+                dir: number;       // 0=right, 1=left, 2=bottom, 3=top
+                availW: number;
+                availH: number;
+                x: number;         // popup left (layer-local)
+                y: number;         // popup top  (layer-local)
+            }
+
+            const candidates: Candidate[] = [];
+
+            // RIGHT of exclusion zone
+            {
+                const availW = layerW - exR - GAP;
+                const availH = layerH;
+                if (availW >= MIN_W) {
+                    const x = exR + GAP;
+                    // Vertically center on the node, clamped
+                    const popH = Math.min(Math.max(MIN_H, availH), MAX_H);
+                    let y = nodeCY - popH / 2;
+                    y = Math.max(0, Math.min(y, layerH - popH));
+                    candidates.push({ dir: 0, availW: Math.min(availW, MAX_W), availH: popH, x, y });
+                }
+            }
+
+            // LEFT of exclusion zone
+            {
+                const availW = exL - GAP;
+                const availH = layerH;
+                if (availW >= MIN_W) {
+                    const popW = Math.min(availW, MAX_W);
+                    const x = exL - GAP - popW;
+                    const popH = Math.min(Math.max(MIN_H, availH), MAX_H);
+                    let y = nodeCY - popH / 2;
+                    y = Math.max(0, Math.min(y, layerH - popH));
+                    candidates.push({ dir: 1, availW: popW, availH: popH, x: Math.max(0, x), y });
+                }
+            }
+
+            // BOTTOM of exclusion zone
+            {
+                const availH = layerH - exB - GAP;
+                const availW = layerW;
+                if (availH >= MIN_H) {
+                    const popW = Math.min(Math.max(MIN_W, availW), MAX_W);
+                    let x = nodeCX - popW / 2;
+                    x = Math.max(0, Math.min(x, layerW - popW));
+                    const y = exB + GAP;
+                    candidates.push({ dir: 2, availW: popW, availH: Math.min(availH, MAX_H), x, y });
+                }
+            }
+
+            // TOP of exclusion zone
+            {
+                const availH = exT - GAP;
+                const availW = layerW;
+                if (availH >= MIN_H) {
+                    const popW = Math.min(Math.max(MIN_W, availW), MAX_W);
+                    let x = nodeCX - popW / 2;
+                    x = Math.max(0, Math.min(x, layerW - popW));
+                    const popH = Math.min(availH, MAX_H);
+                    const y = exT - GAP - popH;
+                    candidates.push({ dir: 3, availW: popW, availH: popH, x, y: Math.max(0, y) });
+                }
+            }
+
+            // ── 3. Pick the best candidate with hysteresis ──
+
+            if (candidates.length === 0) {
+                // Fallback: place below node, clamped to layer
+                const popW = Math.min(MAX_W, layerW);
+                const popH = Math.min(MAX_H, layerH);
+                let x = nodeCX - popW / 2;
+                x = Math.max(0, Math.min(x, layerW - popW));
+                let y = exB + GAP;
+                y = Math.max(0, Math.min(y, layerH - popH));
+
+                this.applyPopupPosition(popup, x, y, popW, popH);
+                this.lastChosenDirection.set(popup, 2);
+                continue;
+            }
+
+            // Score each candidate by available area
+            const scored = candidates.map(c => ({
+                ...c,
+                area: c.availW * c.availH,
             }));
- 
-            const best = candidates.reduce((current, candidate) => {
-                return overlapArea(candidate.left, candidate.top) < overlapArea(current.left, current.top)
-                    ? candidate
-                    : current;
-            }, candidates[0]);
- 
-            popup.style.left = `${best.left}px`;
-            popup.style.top = `${best.top}px`;
+            scored.sort((a, b) => b.area - a.area);
+
+            const lastDir = this.lastChosenDirection.get(popup);
+            let chosen = scored[0];
+
+            if (lastDir !== undefined) {
+                const currentDirCandidate = scored.find(c => c.dir === lastDir);
+                if (currentDirCandidate) {
+                    const bestArea = scored[0].area;
+                    const currentArea = currentDirCandidate.area;
+                    // Stick with current direction unless the best is significantly better
+                    if (currentArea > 0 && (bestArea - currentArea) / currentArea < HYSTERESIS) {
+                        chosen = currentDirCandidate;
+                    }
+                }
+            }
+
+            this.lastChosenDirection.set(popup, chosen.dir);
+
+            // ── 4. Apply position and size ──
+            this.applyPopupPosition(popup, chosen.x, chosen.y, chosen.availW, chosen.availH);
         }
     }
+
+    private applyPopupPosition(
+        popup: HTMLElement,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+    ): void {
+        // Override CSS defaults: remove the centering transform
+        popup.style.transform = 'none';
+        popup.style.left = `${Math.round(x)}px`;
+        popup.style.top = `${Math.round(y)}px`;
+        popup.style.width = `${Math.round(w)}px`;
+        popup.style.maxHeight = `${Math.round(h)}px`;
+    }
+
 
     sync(svg: Element, index: Map<string, CommentSlotInfo>): void {
         const layer = this.options.popupLayer;
@@ -650,11 +742,11 @@ export class CommentOverlay {
             if (!nodeId) continue;
 
             const slot = index.get(nodeId);
-            if (!slot) {
+            if (!slot?.text?.trim()) {
                 const controller = this.controllers.get(nodeId);
                 if (controller) {
                     if (editingNodeId !== nodeId) {
-                        controller.removeIcon();
+                        //controller.removeIcon();
                         controller.removePopupUnlessEditing();
                         this.controllers.delete(nodeId);
                     }
@@ -686,7 +778,7 @@ export class CommentOverlay {
 
         for (const [nodeId, controller] of this.controllers) {
             if (!activeNodeIds.has(nodeId) && editingNodeId !== nodeId) {
-                controller.removeIcon();
+                // controller.removeIcon();
                 controller.removePopupUnlessEditing();
                 this.controllers.delete(nodeId);
             }
@@ -705,6 +797,7 @@ export class CommentOverlay {
     }
 
     openCommentEditor(nodeId: string, slot: CommentSlotInfo, svg: Element): boolean {
+        //if (!slot.text?.trim()) return false;
         const nodeEl = this.findNodeElement(svg, nodeId);
         if (!nodeEl) return false;
 
@@ -733,9 +826,14 @@ export class CommentOverlay {
         }
         return null;
     }
-
+    hideAllPopups(): void {
+        for (const controller of this.controllers.values()) {
+            controller.removePopupUnlessEditing();
+        }
+    }
     destroy(): void {
         this.visiblePopups.clear();
+        this.lastChosenDirection.clear();
         for (const controller of this.controllers.values()) {
             controller.removeIcon();
             controller.removePopupUnlessEditing();

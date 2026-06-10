@@ -1,16 +1,16 @@
-import {Editor} from 'obsidian';
-import {IPureNode} from 'markmap-common';
-import {MarkdownEdit, MarkmapSettings, NodeMappingInfo, SyncDirection, SyncState} from '../types';
-import {NodeMappingManager} from './NodeMapping';
+import { Editor } from 'obsidian';
+import { IPureNode } from 'markmap-common';
+import { MarkdownEdit, MarkmapSettings, NodeMappingInfo, SyncDirection, SyncState } from '../types';
+import { NodeMappingManager } from './NodeMapping';
 import {
-	changeHeadingLevel,
-	changeListIndent,
-	extractListItemWithChildren,
-	getHeadingLevel,
-	getListIndent,
-	isListItem,
-	moveListItem,
-	parseMarkdownStructure,
+    changeHeadingLevel,
+    changeListIndent,
+    extractListItemWithChildren,
+    getHeadingLevel,
+    getListIndent,
+    isListItem,
+    moveListItem,
+    parseMarkdownStructure,
 } from '../utils/markdown';
 
 export interface SyncEngineOptions {
@@ -77,7 +77,7 @@ export class SyncEngine {
             this.syncState.source = null;
         }
     }
-// the entrance of writing data from markmap to markdown
+    // the entrance of writing data from markmap to markdown
     async markmapToMarkdown(
         editor: Editor,
         node: IPureNode,
@@ -177,11 +177,11 @@ export class SyncEngine {
             }
         }
 
-        if (targetLine === -1) {
-            this.mappingManager.updateContent(content);
-            const nodeContent = typeof node.content === 'string' ? node.content : '';
-            targetLine = this.mappingManager.findLineByContent(this.mappingManager.extractTextContent(nodeContent));
-        }
+        /*  if (targetLine === -1) {
+             this.mappingManager.updateContent(content);
+             const nodeContent = typeof node.content === 'string' ? node.content : '';
+             targetLine = this.mappingManager.findLineByContent(this.mappingManager.extractTextContent(nodeContent));
+         } */
 
         if (targetLine === -1) return [];
 
@@ -406,15 +406,15 @@ export class SyncEngine {
         edits.sort((a, b) => b.fromLine - a.fromLine);
 
         for (const edit of edits) {
-            const from = {line: edit.fromLine, ch: edit.fromCh || 0};
-            const to = {line: edit.toLine, ch: edit.toCh ?? editor.getLine(edit.toLine).length};
-            console.log('start line at',from.line,';end line at',to.line);
+            const from = { line: edit.fromLine, ch: edit.fromCh || 0 };
+            const to = { line: edit.toLine, ch: edit.toCh ?? editor.getLine(edit.toLine).length };
+            console.log('start line at', from.line, ';end line at', to.line);
 
             doc.replaceRange(edit.newText, from, to);
         }
     }
 
-    private findLineByContent(lines: string[], content: string): number {
-        return this.mappingManager.findLineByContent(content, 0);
-    }
+    /*   private findLineByContent(lines: string[], content: string): number {
+          return this.mappingManager.findLineByContent(content, 0);
+      } */
 }

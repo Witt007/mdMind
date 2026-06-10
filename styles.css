@@ -579,12 +579,11 @@
 }
 
 .markmap-comment-popup {
-    /* Popup is positioned via JS (left/top relative to the popup-layer)
+    /* Popup is positioned entirely by JS (left/top/width relative to the popup-layer)
        so it follows markmap pan/zoom and lives above the SVG. */
     position: absolute;
     left: 0;
     top: 0;
-    transform: translate(-50%, 4px);
 
     min-width: 260px;
     max-width: 380px;
@@ -788,5 +787,5 @@ body.theme-dark .markmap-comment-popup {
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
-    transform: translate(-50%, 0) !important;
+    /* transform is set by JS repositionVisiblePopups – do NOT override here */
 }

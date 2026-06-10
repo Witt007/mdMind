@@ -6,7 +6,7 @@ import { CommentOverlay } from '../components/CommentOverlay';
 import { MarkmapSettings } from '../types';
 import { CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP } from '../constants';
 import { Debouncer, throttle } from '../utils/debounce';
-import { buildCommentIndex, canAddCommentToNode, computeCommentSlot, CommentSlotInfo } from '../utils/commentSlot';
+import { buildCommentIndex, computeCommentSlot, CommentSlotInfo } from '../utils/commentSlot';
 import { generateNodeEditorStyles } from '../utils/theme';
 
 export interface MarkmapToolbar {
@@ -108,6 +108,17 @@ export class MarkmapView extends ItemView {
         }
 
         this.commentRenderDebouncer.cancel();
+    }
+
+    onResize(): void {
+        super.onResize();
+        this.renderer?.adjustNodeWidthsOnZoom();
+
+        if (this.editorOverlay) {
+            this.updateEditorPosition();
+        }
+
+        this.commentOverlay?.repositionVisiblePopups();
     }
 
     updateSettings(settings: MarkmapSettings): void {
@@ -225,8 +236,14 @@ export class MarkmapView extends ItemView {
                 }
                 this.commentOverlay?.repositionVisiblePopups();
 
-            },
-            onUpdate: () => this.scheduleRenderComments()
+            }
+            /*  onUpdate: () => {
+                 //this.scheduleRenderComments()
+                 if (this.editorOverlay) {
+                     this.updateEditorPosition();
+                 }
+                 this.commentOverlay?.repositionVisiblePopups();
+             } */
         });
     }
 
@@ -252,10 +269,8 @@ export class MarkmapView extends ItemView {
         this.registerEvent(
             this.app.workspace.on('editor-change', (editor) => {
                 if (this.isActiveEditor(editor)) {
-                    this.debouncer.setWait(2000);
-                    this.debouncer.executeDebounced(() => {
-                        this.updateFromActiveFile();
-                    });
+
+                    this.updateFromActiveFile();
                 }
             })
         );
@@ -355,7 +370,7 @@ export class MarkmapView extends ItemView {
 
         e.preventDefault();
         e.stopPropagation();
-        await this.focusNodeInEditor(targetNode);
+        this.focusNodeInEditor(targetNode);
     }
 
     private getParentNode(node: IPureNode): IPureNode | undefined {
@@ -404,11 +419,11 @@ export class MarkmapView extends ItemView {
         return this.renderer.getNodeByNodeId(mapping.nodeId) ?? undefined;
     }
 
-    private selectNodeForComment(node: IPureNode): void {
-        this.clearNodeSelection();
-        this.selectedSvgNode = this.findSvgNodeFromMnodes(node);
-        this.addHighlight();
-    }
+    /*     private selectNodeForComment(node: IPureNode): void {
+            this.clearNodeSelection();
+            this.selectedSvgNode = this.findSvgNodeFromMnodes(node);
+            this.addHighlight();
+        } */
 
     private isActiveEditor(editor: Editor): boolean {
         //this.app.workspace.getActiveViewOfType(MarkdownView) represents the current active view is markdown editor, but it maybe is another tab of markdown editor
@@ -500,52 +515,57 @@ export class MarkmapView extends ItemView {
         const now = Date.now();
         if (now - this.lastCursorTrackTime < 100) return;
         this.lastCursorTrackTime = now;
-        const activeFile = this.app.workspace.getActiveFile();
 
-        if (!activeFile || activeFile.extension !== 'md') {
-            this.file = null;
-            this.currentEditor = null;
-            this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN);
-            return;
-        }
 
-        this.file = activeFile;
+        throttle(() => {
 
-        let currentEditor: Editor | null = null;
-        // Try to get editor from active MarkdownView for bidirectional sync
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!activeView) return;
-        if (activeView.file === activeFile) {
-            currentEditor = activeView.editor;
-        } else {
-            // Try to find any MarkdownView for this file
-            const mdView = this.findMarkdownView();
-            if (mdView) {
-                currentEditor = mdView.editor;
-            } else {
-                // No editor available, read from vault
-                currentEditor = null;
+            const activeFile = this.app.workspace.getActiveFile();
+
+            if (!activeFile || activeFile.extension !== 'md') {
+                this.file = null;
+                this.currentEditor = null;
+                this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN);
+                return;
             }
-        }
 
-        // if (this.compareEditors(this.currentEditor, currentEditor)) return console.error('same editor, no need to update') ;
+            this.file = activeFile;
 
-        this.currentEditor = currentEditor;
+            let currentEditor: Editor | null = null;
+            // Try to get editor from active MarkdownView for bidirectional sync
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!activeView) return;
+            if (activeView.file === activeFile) {
+                currentEditor = activeView.editor;
+            } else {
+                // Try to find any MarkdownView for this file
+                const mdView = this.findMarkdownView();
+                if (mdView) {
+                    currentEditor = mdView.editor;
+                } else {
+                    // No editor available, read from vault
+                    currentEditor = null;
+                }
+            }
 
-        if (!this.currentEditor) return this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN);
+            // if (this.compareEditors(this.currentEditor, currentEditor)) return console.error('same editor, no need to update') ;
 
-        this.hideMessage();
+            this.currentEditor = currentEditor;
 
-        this.updateMarkmapFromEditor(this.currentEditor, () => {
+            if (!this.currentEditor) return this.showMessage(activeFile ? ERROR_MESSAGES.NOT_MARKDOWN : ERROR_MESSAGES.NO_FILE_OPEN);
 
-            this.updateNode_deboucer.executeDebounced(() => {
-                this.handleCursorActivity(undefined, (node) => {
-                    this.focusNodeInEditor(node, undefined, true)
+            this.hideMessage();
+
+            this.updateMarkmapFromEditor(this.currentEditor, () => {
+
+                this.updateNode_deboucer.executeDebounced(() => {
+                    this.handleCursorActivity(undefined, (node) => {
+                        this.focusNodeInEditor(node, undefined, true)
+                    });
+                    this.renderer?.adjustNodeWidthsOnZoom();
                 });
-            });
 
-        }, 'none');
-
+            }, 'none');
+        }, 1000)();
     }
 
     private showMessage(text: string): void {
@@ -1084,23 +1104,23 @@ export class MarkmapView extends ItemView {
         // If we have a target line, try to find the nodeId from mapping
         if (targetLine !== undefined) {
             // Find mappings for the target line
-            const nodeIds = this.syncEngine!.getMappingManager().getNodeIdsAtLine(targetLine);
-            console.log('idsAtLine when writing markmap to markdown.\n', nodeIds, 'at line', targetLine);
-            for (const nodeId of nodeIds) {
-                const node = this.renderer.getNodeByNodeId(nodeId);
-                if (node) {
+            const nodeId = this.syncEngine!.getMappingManager().getNodeIdsAtLine(targetLine);
+            console.log('idsAtLine when writing markmap to markdown.\n', nodeId, 'at line', targetLine);
 
-                    const plainText = this.syncEngine!.getMappingManager().extractTextContent(node.content);
-                    // Check if it's actually the "New Node" we just added
-                    if (plainText === 'New Node') { //todo the if is redundant
-                        await this.focusNodeInEditor(node);
+            const node = this.renderer.getNodeByNodeId(nodeId);
+            if (node) {
 
-                        /*shownodeeditor must be called before calling focusnodeineditor, because it relies on selectednodeid */
-                        this.showNodeEditor(plainText);
-                        return;
-                    }
+                const plainText = this.syncEngine!.getMappingManager().extractTextContent(node.content);
+                // Check if it's actually the "New Node" we just added
+                if (plainText === 'New Node') { //todo the if is redundant
+                    this.focusNodeInEditor(node);
+
+                    /*shownodeeditor must be called before calling focusnodeineditor, because it relies on selectednodeid */
+                    this.showNodeEditor(plainText);
+                    return;
                 }
             }
+
         }
 
         /*     // Fallback to searching for "New Node" text if targetLine didn't work or wasn't provided
@@ -1134,7 +1154,7 @@ export class MarkmapView extends ItemView {
         if (this.selectedSvgNode) {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
-            this.scheduleRenderComments();
+            //this.renderComments();
         }
     }
 
@@ -1146,7 +1166,8 @@ export class MarkmapView extends ItemView {
             el.removeClass(CSS_CLASSES.highlightedNode);
             el.removeClass(CSS_CLASSES.selectedNode);
         });
-        this.scheduleRenderComments();
+        this.commentOverlay?.hideAllPopups();
+        //this.scheduleRenderComments();
     }
 
     private resetStateOnFileChange(): void {
@@ -1187,30 +1208,30 @@ export class MarkmapView extends ItemView {
             && (e.ctrlKey || e.metaKey);
     }
 
-    private shouldHandleAddCommentHotkey(e: KeyboardEvent): boolean {
-        if (!this.selectedSvgNode || !this.canAddCommentToSelection()) return false;
-        const target = e.target;
+    public shouldHandleAddCommentHotkey(e?: KeyboardEvent): boolean {
+        if (!this.selectedSvgNode) return false;
+        const target = e?.target;
         if (!(target instanceof HTMLElement)) return true;
         if (target.closest('.markmap-comment-textarea')) return false;
         if (target.closest(`.${CSS_CLASSES.inlineEditor} textarea`)) return false;
         return true;
     }
 
-    canAddCommentToSelection(): boolean {
-        const node = this.getCurrentNodeForComment();
-        if (!node || !this.syncEngine) return false;
-
-        const nodeId = (node.payload as { nodeId?: string } | undefined)?.nodeId;
-        if (!nodeId) return false;
-
-        const mapping = this.syncEngine.getMappingManager().getMappingById(nodeId);
-        if (!mapping) return false;
-
-        return canAddCommentToNode(
-            mapping,
-            (from, to, id) => this.syncEngine!.getMappingManager().hasOtherNodeStartInRange(id, from, to)
-        );
-    }
+    /*    canAddCommentToSelection(): boolean {
+           const node = this.getCurrentNodeForComment();
+           if (!node || !this.syncEngine) return false;
+   
+           const nodeId = (node.payload as { nodeId?: string } | undefined)?.nodeId;
+           if (!nodeId) return false;
+   
+           const mapping = this.syncEngine.getMappingManager().getMappingById(nodeId);
+           if (!mapping) return false;
+   
+           return canAddCommentToNode(
+               mapping,
+               (from, to, id) => this.syncEngine!.getMappingManager().hasOtherNodeStartInRange(id, from, to)
+           );
+       } */
 
     async addCommentToSelectedNode(): Promise<void> {
         const node = this.getCurrentNodeForComment();
@@ -1219,8 +1240,6 @@ export class MarkmapView extends ItemView {
             return;
         }
 
-        this.selectNodeForComment(node);
-
         const nodeId = (node.payload as { nodeId?: string } | undefined)?.nodeId;
         if (!nodeId || !this.syncEngine || !this.renderer || !this.commentOverlay) return;
 
@@ -1228,13 +1247,13 @@ export class MarkmapView extends ItemView {
         const mapping = mappingManager.getMappingById(nodeId);
         if (!mapping) return;
 
-        const hasOther = (from: number, to: number, id: string) =>
-            mappingManager.hasOtherNodeStartInRange(id, from, to);
+        const hasOther = (from: number, to: number) =>
+            mappingManager.findNextNodeLine(from, to);
 
-        if (!canAddCommentToNode(mapping, hasOther)) {
-            new Notice('Cannot add comment here: another node starts in this region');
-            return;
-        }
+        /*  if (!canAddCommentToNode(mapping, hasOther)) {
+             new Notice('Cannot add comment here: another node starts in this region');
+             return;
+         } */
 
         const svg = this.renderer.getSvg();
         if (!svg) return;
@@ -1256,7 +1275,7 @@ export class MarkmapView extends ItemView {
         const fromLine = mapping.startLine + 1;
         let slot: CommentSlotInfo;
 
-        if (fromLine > mapping.endLine) {
+        if (fromLine >= mapping.endLine) {
             const titleCh = editor.getLine(mapping.startLine).length;
             editor.replaceRange('\n', { line: mapping.startLine, ch: titleCh });
             slot = {
@@ -1320,7 +1339,7 @@ export class MarkmapView extends ItemView {
         const index = buildCommentIndex(
             mappingManager.getAllMappings(),
             lines,
-            (from, to, id) => mappingManager.hasOtherNodeStartInRange(id, from, to)
+            (from, to) => mappingManager.findNextNodeLine(from, to)
         );
 
         this.commentOverlay.sync(svg, index);

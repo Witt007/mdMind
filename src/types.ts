@@ -1,4 +1,4 @@
-import {IPureNode} from 'markmap-common';
+import { IPureNode } from 'markmap-common';
 
 export interface MarkmapSettings {
     openOnStartup: boolean;
@@ -38,7 +38,7 @@ export interface NodeMappingInfo {
 }
 
 export interface LineNodeMap {
-    [lineNumber: number]: string[];
+    [lineNumber: number]: string;
 }
 
 export interface SyncState {

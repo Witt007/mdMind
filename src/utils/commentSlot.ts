@@ -1,4 +1,4 @@
-import {NodeMappingInfo} from '../types';
+import { NodeMappingInfo } from '../types';
 
 export interface CommentSlotInfo {
     nodeId: string;
@@ -10,47 +10,38 @@ export interface CommentSlotInfo {
 
 export type HasOtherNodeStartInRange = (
     fromLine: number,
-    toLine: number,
-    excludeNodeId: string
+    toLine: number
 ) => boolean;
 
 export function computeCommentSlot(
     mapping: NodeMappingInfo,
     lines: string[],
-    hasOtherNodeStartInRange: HasOtherNodeStartInRange
+    findNextNodeLine: (fromLine: number, toLine: number) => number | null
 ): CommentSlotInfo | null {
-    const fromLine = mapping.startLine + 1;
     let toLine = mapping.endLine;
 
-    if (fromLine > toLine) return null;
+    let nextNodeLine = findNextNodeLine(toLine, lines.length - 1);
+    if (nextNodeLine == null) return null;
 
-    for (let line = fromLine; line <= toLine; line++) {
-        if (hasOtherNodeStartInRange(line, line, mapping.nodeId)) {
-            toLine = line - 1;
-            break;
-        }
-    }
 
-    if (fromLine > toLine) return null;
-
-    const slice = lines.slice(fromLine, toLine + 1);
+    const slice = lines.slice(toLine, nextNodeLine + 1);
     const hasContent = slice.some((line) => line.trim() !== '');
     if (!hasContent) return null;
 
     const text = slice.join('\n');
-    const contentHash = `${fromLine}:${toLine}:${text}`;
+    const contentHash = `${toLine}:${nextNodeLine}:${text}`;
 
     return {
         nodeId: mapping.nodeId,
-        fromLine,
-        toLine,
+        fromLine: toLine,
+        toLine: nextNodeLine - 1,
         text,
         contentHash,
     };
 }
 
 /** Whether a comment can be placed after this node's title line (no child/sibling start in the gap). */
-export function canAddCommentToNode(
+/* export function canAddCommentToNode(
     mapping: NodeMappingInfo,
     hasOtherNodeStartInRange: HasOtherNodeStartInRange
 ): boolean {
@@ -63,17 +54,17 @@ export function canAddCommentToNode(
         }
     }
     return fromLine <= toLine || !hasOtherNodeStartInRange(fromLine, fromLine, mapping.nodeId);
-}
+} */
 
 export function buildCommentIndex(
     mappings: NodeMappingInfo[],
     lines: string[],
-    hasOtherNodeStartInRange: HasOtherNodeStartInRange
+    findNextNodeLine: (fromLine: number, toLine: number) => number | null
 ): Map<string, CommentSlotInfo> {
     const index = new Map<string, CommentSlotInfo>();
 
     for (const mapping of mappings) {
-        const slot = computeCommentSlot(mapping, lines, hasOtherNodeStartInRange);
+        const slot = computeCommentSlot(mapping, lines, findNextNodeLine);
         if (slot) {
             index.set(mapping.nodeId, slot);
         }

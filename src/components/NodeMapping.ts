@@ -1,25 +1,25 @@
-import {IPureNode} from 'markmap-common';
-import {LineNodeMap, NodeMappingInfo} from '../types';
-import {generateNodeId} from '../utils/markdown';
+import { IPureNode } from 'markmap-common';
+import { LineNodeMap, NodeMappingInfo } from '../types';
+import { generateNodeId } from '../utils/markdown';
 
 export class NodeMappingManager {
     private mappings: Map<string, NodeMappingInfo> = new Map();
     private lineMap: LineNodeMap = {};
     private contentLines: string[] = [];
-    private normalizedLines: string[] = [];
-    private isNodeStartLine: boolean[] = [];
 
-    private lastFoundLine = -1;
 
     buildMappings(root: IPureNode, markdown: string): void {
         this.mappings.clear();
         this.lineMap = {};
         this.contentLines = markdown.split('\n');
-        this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
-        this.isNodeStartLine = this.buildNodeStartLineIndex(this.contentLines);
-        this.lastFoundLine = -1;
 
-        this.processNode(root, 0, undefined);
+        if (root.content === '') {
+            if (root.children) {
+                for (const child of root.children) {
+                    this.processNode(child, 1, undefined);
+                }
+            }
+        } else this.processNode(root, 0, undefined);
     }
 
     public extractTextContent(content: string): string {
@@ -33,13 +33,13 @@ export class NodeMappingManager {
     }
 
     getMappingByLine(line: number): NodeMappingInfo | undefined {
-        const nodeIds = this.lineMap[line];
-        if (!nodeIds || nodeIds.length === 0) return undefined;
-        return this.mappings.get(nodeIds[0]);
+        const nodeId = this.lineMap[line];
+        if (!nodeId) return undefined;
+        return this.mappings.get(nodeId);
     }
 
-    getNodeIdsAtLine(line: number): string[] {
-        return this.lineMap[line] || [];
+    getNodeIdsAtLine(line: number): string {
+        return this.lineMap[line] || '';
     }
 
     getAllMappings(): NodeMappingInfo[] {
@@ -48,8 +48,6 @@ export class NodeMappingManager {
 
     updateContent(markdown: string): void {
         this.contentLines = markdown.split('\n');
-        this.normalizedLines = this.contentLines.map(line => this.normalizeLine(line));
-        this.isNodeStartLine = this.buildNodeStartLineIndex(this.contentLines);
     }
 
     public getContentLines(): string[] {
@@ -60,8 +58,6 @@ export class NodeMappingManager {
         this.mappings.clear();
         this.lineMap = {};
         this.contentLines = [];
-        this.normalizedLines = [];
-        this.isNodeStartLine = [];
     }
 
     findNearestNode(line: number): NodeMappingInfo | undefined {
@@ -85,89 +81,44 @@ export class NodeMappingManager {
         return this.getAllMappings().filter(m => m.parentId === nodeId);
     }
 
-    hasOtherNodeStartInRange(excludeNodeId: string, fromLine: number, toLine: number): boolean {
+    findNextNodeLine(fromLine: number, toLine: number): number | null {
         for (let line = fromLine; line <= toLine; line++) {
-            const nodeIds = this.lineMap[line];
-            if (!nodeIds || nodeIds.length === 0) continue;
-            if (nodeIds.some((id) => id !== excludeNodeId)) {
-                return true;
-            }
+            const nodeId = this.lineMap[line];
+            if (!nodeId) continue;
+            return line;
         }
-        return false;
+        return null;
     }
 
     // the purpose is just mapping the node to the line, so we can find the node by line number when we click on the line, and find the line number by node when we click on the node;
     private processNode(node: IPureNode, depth: number, parentId?: string): void {
-        const content = this.extractTextContent(node.content);
-        const normalizedContent = this.normalizeLine(content);
+        const lines = (node.payload?.lines as string)?.split(',').map(Number);
+        if (!lines) return console.warn('startLine or endLine is not defined', node);
+        let [startLine, endLine] = lines;
+        if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) return console.warn('startLine or endLine is not defined', node);
 
-        // Markmap's root node is synthetic (its content is usually empty) and does not map to a markdown line.
-        // Mapping it would incorrectly match the first blank line in the document.
-        if (depth === 0 && !parentId && normalizedContent === '') {
-            if (node.children) {
-                for (const child of node.children) {
-                    this.processNode(child, depth + 1, undefined);
-                }
-            }
-            return;
-        }
-
-        let startLine = this.findLineByContent(content, this.lastFoundLine + 1);
-        console.info('from lastFoundLine',this.lastFoundLine+1,'\nreturned lastFoundLine:',startLine,'\ncontent:',content,'\nnormalines:',this.normalizedLines)
-        //if (startLine === -1) return;//if (node.payload?.nodeId=="filenode"){startLine=0;}else
-        this.lastFoundLine = startLine;
-
-        const endLine = this.findNodeEndLine(startLine, depth);
-        // Use renderer-assigned nodeId from node.payload if available, otherwise fall back
-        const nodeId = (node.payload as any)?.nodeId || generateNodeId(startLine, content);
+        const nodeId = (node.payload as any)?.nodeId || generateNodeId(startLine, node.content);
 
         const info: NodeMappingInfo = {
             nodeId,
             startLine,
             endLine,
             depth,
-            content,
+            content: node.content,
             parentId,
         };
 
         this.mappings.set(nodeId, info);
 
-        if (!this.lineMap[startLine]) {
-            this.lineMap[startLine] = [];
-        }
-        this.lineMap[startLine].push(nodeId);
+        this.lineMap[startLine] = nodeId;
 
-        if (node.children) { // when a specific node's position changed, its children have to be changed;
+        if (node.children) {
             for (const child of node.children) {
                 this.processNode(child, depth + 1, nodeId);
             }
         }
     }
 
-    public findLineByContent(content: string, startIndex: number = 0): number {
-        const normalizedContent = this.normalizeLine(content);
-
-        // Empty content cannot be matched reliably in markdown (it would match any blank line).
-        if (normalizedContent === '') return -1;
-
-        // Exact match
-        for (let i = startIndex; i < this.normalizedLines.length; i++) {
-            if (!this.isNodeStartLine[i]) continue;
-            if (this.normalizedLines[i] === normalizedContent) {
-                return i;
-            } else console.log(`Line ${i} does not match. Expected: "${normalizedContent}", Actual: "${this.normalizedLines[i]}"`);
-        }
-
-        // Partial match fallback if exact match fails
-     /*   for (let i = startIndex; i < this.normalizedLines.length; i++) {
-            if (this.normalizedLines[i].includes(normalizedContent) || normalizedContent.includes(this.normalizedLines[i])) {
-                if (this.normalizedLines[i].length > 0 && normalizedContent.length > 0) {
-                    return i;
-                }
-            }
-        }*/
-        return -1;
-    }
 
     private buildNodeStartLineIndex(lines: string[]): boolean[] {
         const isStart: boolean[] = new Array(lines.length).fill(false);

@@ -130,9 +130,6 @@ export class MarkmapRenderer {
                         self.selectedSvgNode = null;
                         self.ontransitionend = () => {
                         };
-                        if (self.options.onUpdate) {
-                            self.options.onUpdate();
-                        }
                     })
                 }
                 if (self.operationType == 'none') return execution();
@@ -216,7 +213,6 @@ export class MarkmapRenderer {
             if (this.options.onUpdate) {
                 this.options.onUpdate();
             }
-            this.adjustNodeWidthsOnZoom();
             return { ...result, root: rootNode };
         } catch (error) {
             console.error('Failed to render markmap:', error);
@@ -388,7 +384,7 @@ export class MarkmapRenderer {
      * then find visible nodes whose content overflows the viewport and clamp their
      * width so they don't extend past the right edge of the viewport.
      */
-    private adjustNodeWidthsOnZoom(): void {
+    public adjustNodeWidthsOnZoom(): void {
         if (!this.svg || !this.container) return;
         const containerRect = this.container.getBoundingClientRect();
         const viewportRight = containerRect.right;
@@ -433,26 +429,25 @@ export class MarkmapRenderer {
         // Use capture phase so this fires before d3-zoom's target-phase listener,
         // which calls stopImmediatePropagation() and would otherwise swallow the event.
         // stopPropagation() here prevents d3-zoom from also zooming.
-        this.container.addEventListener('wheel', (e) => {
-            const target = e.target as HTMLElement;
-            if (
-                target.closest(`.${CSS_CLASSES.inlineEditor}`)
-                || target.closest(`.${CSS_CLASSES.commentPopup}`)
-                || target.closest(`.${CSS_CLASSES.commentPopupLayer}`)
-            ) {
-                return;
-            }
-            e.preventDefault();
-            if (!this.markmap || this.zoomLocked) e.stopPropagation();
-
-            /*const scale = e.deltaY > 0 ? 0.9 : 1.1;
-            void this.markmap.rescale(scale);*/
-        }, { capture: true, passive: false });
+        /*  this.svg.addEventListener('wheel', (e) => {
+             const target = e.target as HTMLElement;
+             if (
+                 target.closest(`.${CSS_CLASSES.inlineEditor}`)
+                 || target.closest(`.${CSS_CLASSES.commentPopup}`)
+                 || target.closest(`.${CSS_CLASSES.commentPopupLayer}`)
+             ) {
+                 return;
+             }
+             e.preventDefault();
+             if (!this.markmap || this.zoomLocked) e.stopPropagation();
+             if (this.options.onZoom) {
+                 this.options.onZoom();
+             }
+   
+         }, { capture: true, passive: false }); */
 
         this.markmap.zoom.on('zoom.renderer', () => {
-            if (this.options.onZoom) {
-                this.options.onZoom();
-            }
+            this.options.onZoom?.();
         });
     }
 
