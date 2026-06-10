@@ -7,6 +7,8 @@ export class NodeMappingManager {
     private lineMap: LineNodeMap = {};
     private contentLines: string[] = [];
 
+    getLenOfContentLines(): number{return this.contentLines.length}
+
 
     buildMappings(root: IPureNode, markdown: string): void {
         this.mappings.clear();
@@ -38,7 +40,7 @@ export class NodeMappingManager {
         return this.mappings.get(nodeId);
     }
 
-    getNodeIdsAtLine(line: number): string {
+    getNodeIdAtLine(line: number): string {
         return this.lineMap[line] || '';
     }
 

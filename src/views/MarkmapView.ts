@@ -393,17 +393,30 @@ export class MarkmapView extends ItemView {
     }
 
     private getSiblingNode(node: IPureNode, offset: 1 | -1): IPureNode | undefined {
-        const parent = this.getParentNode(node);
-        if (!parent?.children) return undefined;
+        const lines = (node.payload?.lines as string)?.split(',').map(Number);
+        if (!lines?.length) return undefined;
+        const [startLine] = lines;
 
-        const nodeId = node.payload?.nodeId;
-        const currentIndex = parent.children.findIndex((child) => {
-            if (child === node) return true;
-            return !!nodeId && child.payload?.nodeId === nodeId;
-        });
+        const mappingManager = this.syncEngine?.getMappingManager();
+        if (!mappingManager) return undefined;
 
-        if (currentIndex === -1) return undefined;
-        return parent.children[currentIndex + offset];
+        const isUp= offset === -1;
+        for (let i = startLine+offset, end = isUp ? 0 : mappingManager.getLenOfContentLines()-1; isUp ? i >= end : i < end; i += isUp ? -1 : 1) {
+            const nodeid = mappingManager.getNodeIdAtLine(i);
+            if (nodeid) return this.renderer?.getNodeByNodeId(nodeid) ?? undefined;
+        }
+        /*
+               const parent = this.getParentNode(node);
+               if (!parent?.children) return undefd;
+
+               /*const nodeId = node.payload?.nodeId;
+               const currentIndex = parent.children.findIndex((child) => {
+                   if (child === node) return true;
+                   return !!nodeId && child.payload?.nodeId === nodeId;
+               });
+
+               if (currentIndex === -1) return undefined;
+               return parent.children[currentIndex + offset];*/
     }
 
     private getCurrentNodeForComment(): IPureNode | undefined {
@@ -1104,7 +1117,7 @@ export class MarkmapView extends ItemView {
         // If we have a target line, try to find the nodeId from mapping
         if (targetLine !== undefined) {
             // Find mappings for the target line
-            const nodeId = this.syncEngine!.getMappingManager().getNodeIdsAtLine(targetLine);
+            const nodeId = this.syncEngine!.getMappingManager().getNodeIdAtLine(targetLine);
             console.log('idsAtLine when writing markmap to markdown.\n', nodeId, 'at line', targetLine);
 
             const node = this.renderer.getNodeByNodeId(nodeId);
