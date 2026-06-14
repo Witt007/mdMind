@@ -24,7 +24,7 @@ export function computeCommentSlot(
     if (nextNodeLine == null) return null;
 
 
-    const slice = lines.slice(toLine, nextNodeLine + 1);
+    const slice = lines.slice(toLine, nextNodeLine);
     const hasContent = slice.some((line) => line.trim() !== '');
     if (!hasContent) return null;
 

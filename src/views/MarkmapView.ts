@@ -1,13 +1,13 @@
-import { Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf } from 'obsidian';
-import { IPureNode } from 'markmap-common';
-import { MarkmapRenderer, operationType } from '../components/MarkmapRenderer';
-import { SyncEngine } from '../components/SyncEngine';
-import { CommentOverlay } from '../components/CommentOverlay';
-import { MarkmapSettings } from '../types';
-import { CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP } from '../constants';
-import { Debouncer, throttle } from '../utils/debounce';
-import { buildCommentIndex, computeCommentSlot, CommentSlotInfo } from '../utils/commentSlot';
-import { generateNodeEditorStyles } from '../utils/theme';
+import {Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf} from 'obsidian';
+import {IPureNode} from 'markmap-common';
+import {MarkmapRenderer, operationType} from '../components/MarkmapRenderer';
+import {SyncEngine} from '../components/SyncEngine';
+import {CommentOverlay} from '../components/CommentOverlay';
+import {MarkmapSettings} from '../types';
+import {CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP} from '../constants';
+import {Debouncer, throttle} from '../utils/debounce';
+import {buildCommentIndex, computeCommentSlot, CommentSlotInfo} from '../utils/commentSlot';
+import {generateNodeEditorStyles} from '../utils/theme';
 
 export interface MarkmapToolbar {
     container: HTMLElement;
@@ -161,19 +161,19 @@ export class MarkmapView extends ItemView {
         this.toolbar = this.contentEl.createDiv(CSS_CLASSES.toolbar);
 
         const buttons = [
-            { icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn() },
-            { icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut() },
-            { icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit() },
-            { icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom() },
-            { icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll() },
-            { icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll() },
-            { icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile() },
+            {icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn()},
+            {icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut()},
+            {icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit()},
+            {icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom()},
+            {icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll()},
+            {icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll()},
+            {icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile()},
         ];
 
         for (const btn of buttons) {
             const button = this.toolbar.createEl('button', {
                 cls: CSS_CLASSES.toolbarButton,
-                attr: { 'aria-label': btn.tooltip },
+                attr: {'aria-label': btn.tooltip},
             });
             button.innerHTML = this.getIconSvg(btn.icon);
             button.addEventListener('click', btn.action);
@@ -209,6 +209,7 @@ export class MarkmapView extends ItemView {
         this.commentPopupLayer = popupLayer;
 
         this.commentOverlay = new CommentOverlay({
+            app: this.app,
             popupLayer,
             getEditor: () => this.getMarkdownEditor(),
             getFilePath: () => this.file?.path || '',
@@ -293,7 +294,7 @@ export class MarkmapView extends ItemView {
             } else if (['ArrowRight', 'ArrowDown', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
                 void this.handleArrowKey(e);
             }
-        }, { capture: false });
+        }, {capture: false});
 
         /*      // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
              // but a markmap node is already selected in this view.
@@ -330,7 +331,7 @@ export class MarkmapView extends ItemView {
             if ((e.target as Element).closest('.cm-contentContainer'))
                 this.updateFromActiveFile();
 
-        }, { capture: true });
+        }, {capture: true});
 
 
     }
@@ -393,30 +394,32 @@ export class MarkmapView extends ItemView {
     }
 
     private getSiblingNode(node: IPureNode, offset: 1 | -1): IPureNode | undefined {
-        const lines = (node.payload?.lines as string)?.split(',').map(Number);
-        if (!lines?.length) return undefined;
-        const [startLine] = lines;
 
-        const mappingManager = this.syncEngine?.getMappingManager();
-        if (!mappingManager) return undefined;
 
-        const isUp= offset === -1;
-        for (let i = startLine+offset, end = isUp ? 0 : mappingManager.getLenOfContentLines()-1; isUp ? i >= end : i < end; i += isUp ? -1 : 1) {
-            const nodeid = mappingManager.getNodeIdAtLine(i);
-            if (nodeid) return this.renderer?.getNodeByNodeId(nodeid) ?? undefined;
+        const parent = this.getParentNode(node);
+        if (!parent?.children) return undefined;
+
+        const nodeId = node.payload?.nodeId;
+        const currentIndex = parent.children.findIndex((child) => {
+            if (child === node) return true;
+            return !!nodeId && child.payload?.nodeId === nodeId;
+        });
+
+        if (currentIndex === -1) return undefined;
+        const nodeRe = parent.children[currentIndex + offset];
+        if (nodeRe) return nodeRe;
+        else {
+            const mappingManager = this.syncEngine?.getMappingManager();
+            if (!mappingManager) return undefined;
+            const lines = (node.payload?.lines as string)?.split(',').map(Number);
+            if (!lines?.length) return undefined;
+            const [startLine] = lines;
+            const isUp = offset === -1;
+            for (let i = startLine + offset, end = isUp ? 0 : mappingManager.getLenOfContentLines() - 1; isUp ? i >= end : i < end; i += isUp ? -1 : 1) {
+                const nodeid = mappingManager.getNodeIdAtLine(i);
+                if (nodeid) return this.renderer?.getNodeByNodeId(nodeid) ?? undefined;
+            }
         }
-        /*
-               const parent = this.getParentNode(node);
-               if (!parent?.children) return undefd;
-
-               /*const nodeId = node.payload?.nodeId;
-               const currentIndex = parent.children.findIndex((child) => {
-                   if (child === node) return true;
-                   return !!nodeId && child.payload?.nodeId === nodeId;
-               });
-
-               if (currentIndex === -1) return undefined;
-               return parent.children[currentIndex + offset];*/
     }
 
     private getCurrentNodeForComment(): IPureNode | undefined {
@@ -574,7 +577,7 @@ export class MarkmapView extends ItemView {
                     this.handleCursorActivity(undefined, (node) => {
                         this.focusNodeInEditor(node, undefined, true)
                     });
-                    this.renderer?.adjustNodeWidthsOnZoom();
+                    //this.renderer?.adjustNodeWidthsOnZoom();
                 });
 
             }, 'none');
@@ -583,7 +586,7 @@ export class MarkmapView extends ItemView {
 
     private showMessage(text: string): void {
         if (!this.messageEl) {
-            this.messageEl = this.contentEl.createDiv({ cls: CSS_CLASSES.error });
+            this.messageEl = this.contentEl.createDiv({cls: CSS_CLASSES.error});
             this.messageEl.style.position = 'absolute';
             this.messageEl.style.inset = '0';
             this.messageEl.style.display = 'flex';
@@ -639,8 +642,8 @@ export class MarkmapView extends ItemView {
           }*/
         if (!editingOnMarkdown)
             editor.scrollIntoView({
-                from: { line: mapping.startLine, ch: 0 },
-                to: { line: mapping.startLine, ch: 0 }
+                from: {line: mapping.startLine, ch: 0},
+                to: {line: mapping.startLine, ch: 0}
             }, true)
 
         this.clearNodeSelection();
@@ -879,7 +882,10 @@ export class MarkmapView extends ItemView {
             // Stop any running sync loop if present
             const stop = (this.editorOverlay as any)._stopSync;
             if (typeof stop === 'function') {
-                try { stop(); } catch (e) { /* ignore */ }
+                try {
+                    stop();
+                } catch (e) { /* ignore */
+                }
             }
             if (this.markmapContainerEl && this.markmapContainerEl.contains(this.editorOverlay)) {
                 this.markmapContainerEl.removeChild(this.editorOverlay);
@@ -984,7 +990,7 @@ export class MarkmapView extends ItemView {
             });
         });
 
-        menu.showAtPosition({ x: event.clientX, y: event.clientY });
+        menu.showAtPosition({x: event.clientX, y: event.clientY});
     }
 
     private handleNodeDragStart(node: IPureNode, event: DragEvent): void {
@@ -1290,7 +1296,7 @@ export class MarkmapView extends ItemView {
 
         if (fromLine >= mapping.endLine) {
             const titleCh = editor.getLine(mapping.startLine).length;
-            editor.replaceRange('\n', { line: mapping.startLine, ch: titleCh });
+            editor.replaceRange('\n', {line: mapping.startLine, ch: titleCh});
             slot = {
                 nodeId,
                 fromLine,
@@ -1331,9 +1337,9 @@ export class MarkmapView extends ItemView {
         this.renderComments();
     }
 
-    private scheduleRenderComments(): void {
+    /*private scheduleRenderComments(): void {
         this.commentRenderDebouncer.executeDebounced(() => this.renderComments());
-    }
+    }*/
 
     private renderComments(): void {
         if (!this.renderer || !this.syncEngine || !this.commentOverlay) return;

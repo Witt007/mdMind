@@ -1,4 +1,4 @@
-import { Editor, ItemView, MarkdownRenderer, Notice } from 'obsidian';
+import { App, Editor, ItemView, MarkdownRenderer, Notice } from 'obsidian';
 import { IPureNode } from 'markmap-common';
 import { CSS_CLASSES } from '../constants';
 import { CommentSlotInfo } from '../utils/commentSlot';
@@ -12,6 +12,7 @@ const COMMENT_HEADING_PATTERN = /^\s{0,3}#{1,6}(?:\s|$)/m;
 const COMMENT_HEADING_REPLACE_PATTERN = /^(\s{0,3})#{1,6}(?:\s+|$)/gm;
 
 export interface CommentOverlayOptions {
+    app: App;
     popupLayer: HTMLElement;
     getEditor: () => Editor | null;
     getFilePath: () => string;
@@ -403,7 +404,7 @@ class CommentNodeController {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'markmap-comment-content';
         popup.appendChild(contentDiv);
-        MarkdownRenderer.renderMarkdown(
+        MarkdownRenderer.render(this.overlay.app,
             slot.text,
             contentDiv,
             this.overlay.options.getFilePath(),
@@ -502,11 +503,13 @@ class CommentNodeController {
 
 export class CommentOverlay {
     readonly options: CommentOverlayOptions;
+    readonly app: App;
     private controllers = new Map<string, CommentNodeController>();
     private visiblePopups = new Set<PopupEntry>();
 
     constructor(options: CommentOverlayOptions) {
         this.options = options;
+        this.app = options.app;
     }
 
     getPopupLayer(): HTMLElement {
