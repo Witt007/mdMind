@@ -1,12 +1,12 @@
-import { ITransformResult, Transformer } from 'markmap-lib';
-import { IPureNode, INode } from 'markmap-common';
-import { Markmap } from 'markmap-view';
-import { MarkmapSettings } from '../types';
-import { CSS_CLASSES, MARKMAP_COLORS } from '../constants';
+import {ITransformResult, Transformer} from 'markmap-lib';
+import {IPureNode, INode} from 'markmap-common';
+import {Markmap} from 'markmap-view';
+import {MarkmapSettings} from '../types';
+import {CSS_CLASSES, MARKMAP_COLORS} from '../constants';
 import * as d3 from 'd3';
-import { BaseType, Transition } from "d3";
-import { extendedSvgGEle } from "../views/MarkmapView";
-import { Debouncer } from "../utils/debounce";
+import {BaseType, Transition} from "d3";
+import {extendedSvgGEle} from "../views/MarkmapView";
+import {Debouncer} from "../utils/debounce";
 
 export type operationType = "insert-child" | "insert-sibling" | "change-current" | "delete-current" | "none"
 
@@ -116,7 +116,7 @@ export class MarkmapRenderer {
     private resetMarkmapTransition() {
         const self = this;
         Markmap.prototype.transition = function (t) {
-            let { duration: r } = this.options;
+            let {duration: r} = this.options;
             const transition = t.transition().duration(r);
             transition.on('end', function (datum, index, groups) {
                 const mnode = datum as IPureNode
@@ -213,7 +213,7 @@ export class MarkmapRenderer {
             if (this.options.onUpdate) {
                 this.options.onUpdate();
             }
-            return { ...result, root: rootNode };
+            return {...result, root: rootNode};
         } catch (error) {
             console.error('Failed to render markmap:', error);
             return null;
@@ -384,45 +384,43 @@ export class MarkmapRenderer {
      * then find visible nodes whose content overflows the viewport and clamp their
      * width so they don't extend past the right edge of the viewport.
      */
-    public adjustNodeWidthsOnZoom(): void {
-        if (!this.svg || !this.container) return;
+    public adjustNodeWidthsOnZoom(selectedSvgNode:extendedSvgGEle): void {
+        if (!this.svg || !this.container || !selectedSvgNode) return;
+
+        const contentDiv = selectedSvgNode.querySelector('.markmap-foreign > div') as HTMLElement;
+        if (!contentDiv) return;
+
+        // 1. Reset width and max-width to allow the content to take its natural size
+        // This is crucial for "expanding" back when space becomes available.
+        contentDiv.style.removeProperty('width');
+        //contentDiv.style.removeProperty('max-width');
+
         const containerRect = this.container.getBoundingClientRect();
-        const viewportRight = containerRect.right;
-        const viewportLeft = containerRect.left;
-        const viewportTop = containerRect.top;
-        const viewportBottom = containerRect.bottom;
-        // 1. Reset all node content divs to their default (CSS) max-width
-        const allContentDivs = this.svg.querySelectorAll<HTMLElement>('.markmap-foreign > div');
-        allContentDivs.forEach((div) => {
-            div.style.setProperty('max-width', 'max-content', 'important');
-            //div.style.setProperty('width', 'initial', 'important');
-        });
-        // 2. Iterate all markmap nodes and find those that are
-        //    (a) visible inside the viewport, AND
-        //    (b) whose content overflows (can't display fully)
-        const allNodes = this.svg.querySelectorAll<SVGGElement>('.markmap-node');
-        allNodes.forEach((nodeG) => {
-            const contentDiv = nodeG.querySelector<HTMLElement>('.markmap-foreign > div');
-            if (!contentDiv) return;
-            const nodeRect = contentDiv.getBoundingClientRect();
-            // Check if the node is at least partially within the viewport
-            const isInViewport =
-                nodeRect.right > viewportLeft &&
-                nodeRect.left < viewportRight &&
-                nodeRect.bottom > viewportTop &&
-                nodeRect.top < viewportBottom;
-            if (!isInViewport) return;
-            // Check if the node content extends beyond the viewport right edge
-            if (nodeRect.right <= viewportRight) return;
-            // Calculate the available width from the node's left edge to the viewport's right edge
-            const availableWidth = viewportRight - nodeRect.left;
-            if (availableWidth <= 0) return;
-            // Set the node content width to fit within the viewport
-            contentDiv.style.setProperty('width', `max-content`, 'important');
-            contentDiv.style.setProperty('max-width', `${availableWidth}px`, 'important');
-        });
+        // Measure natural size after reset
+        const nodeRect = contentDiv.getBoundingClientRect();
+
+        // 2. Check if the node is at least partially within the viewport
+        const isInViewport =
+            nodeRect.right > containerRect.left &&
+            nodeRect.left < containerRect.right &&
+            nodeRect.bottom > containerRect.top &&
+            nodeRect.top < containerRect.bottom;
+
+        //if (!isInViewport) return;
+        
+        // We want to clamp it to the viewport right edge.
+        // If natural width is smaller than this, max-width won't affect it.
+        // If natural width is larger, it will be clamped.
+        const textLen=Number(contentDiv.getCssPropertyValue('font-size').replace('px',''))*(contentDiv.textContent?.length||0)
+        const availableWidthInCss = Math.min(containerRect.width/1.4,Math.max(nodeRect.width,textLen))
+
+            contentDiv.style.setProperty('width', availableWidthInCss+'px');
+
+          //  contentDiv.style.setProperty('max-width', `${availableWidthInCss}px`, 'important');
+
     }
 
+    private zoomScale=1;
     private setupPanZoom(): void {
         if (!this.svg || !this.markmap) return;
 
@@ -446,8 +444,14 @@ export class MarkmapRenderer {
    
          }, { capture: true, passive: false }); */
 
-        this.markmap.zoom.on('zoom.renderer', () => {
+        this.markmap.zoom.on('zoom.renderer', (evt) => {
+              if (evt.sourceEvent.type === 'wheel') {
+                  // 鼠标滚轮 → 缩放
+
+              }
             this.options.onZoom?.();
+            this.zoomScale= evt.transform.k
+
         });
     }
 

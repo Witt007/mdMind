@@ -112,13 +112,14 @@ export class MarkmapView extends ItemView {
 
     onResize(): void {
         super.onResize();
-        this.renderer?.adjustNodeWidthsOnZoom();
+        this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
 
+        //this.addHighlight();
         if (this.editorOverlay) {
             this.updateEditorPosition();
         }
 
-        this.commentOverlay?.repositionVisiblePopups();
+        this.commentOverlay?.repositionActivePopup();
     }
 
     updateSettings(settings: MarkmapSettings): void {
@@ -235,8 +236,9 @@ export class MarkmapView extends ItemView {
                 if (this.editorOverlay) {
                     this.updateEditorPosition();
                 }
-                this.commentOverlay?.repositionVisiblePopups();
-
+                //this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+                //this.addHighlight();
+                //this.commentOverlay?.repositionActivePopup();
             }
             /*  onUpdate: () => {
                  //this.scheduleRenderComments()
@@ -485,7 +487,8 @@ export class MarkmapView extends ItemView {
  
              this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
-            this.renderComments();
+            //this.selectedSvgNode&&this.renderer.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+            //this.renderComments();
             //this.handleCursorActivity(); //@TODO
             /*   // Restore highlight after re-render
                requestAnimationFrame(() => {
@@ -577,7 +580,7 @@ export class MarkmapView extends ItemView {
                     this.handleCursorActivity(undefined, (node) => {
                         this.focusNodeInEditor(node, undefined, true)
                     });
-                    //this.renderer?.adjustNodeWidthsOnZoom();
+                    //this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
                 });
 
             }, 'none');
@@ -1173,7 +1176,9 @@ export class MarkmapView extends ItemView {
         if (this.selectedSvgNode) {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
-            //this.renderComments();
+            this.renderComments();
+           // this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+
         }
     }
 

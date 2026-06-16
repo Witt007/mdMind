@@ -34,7 +34,7 @@ export function computeCommentSlot(
     return {
         nodeId: mapping.nodeId,
         fromLine: toLine,
-        toLine: nextNodeLine - 1,
+        toLine: nextNodeLine,
         text,
         contentHash,
     };
