@@ -253,7 +253,7 @@ export class CommentOverlay {
     // ── Rendering ──
 
     private renderPreview(popup: HTMLElement, slot: CommentSlotInfo): void {
-       // if (popup.dataset.contentHash === slot.contentHash) return;
+        // if (popup.dataset.contentHash === slot.contentHash) return;
 
         popup.removeClass('is-editing');
         popup.innerHTML = '';
@@ -346,14 +346,14 @@ export class CommentOverlay {
 
             }
 
-        /*    const lastLineText = editor.getLine(currentEndLine) || '';
-            if (currentEndLine >= currentStartLine) {
-                const from = {line: currentStartLine, ch: 0};
-                const to = {line: currentEndLine, ch: lastLineText.length};
-                editor.replaceRange('', from, to);
-            } else {
-            }*/
-            editor.replaceRange(val+'\n', {line: currentStartLine, ch: 0}, {line: currentEndLine, ch: 0});
+            /*    const lastLineText = editor.getLine(currentEndLine) || '';
+                if (currentEndLine >= currentStartLine) {
+                    const from = {line: currentStartLine, ch: 0};
+                    const to = {line: currentEndLine, ch: lastLineText.length};
+                    editor.replaceRange('', from, to);
+                } else {
+                }*/
+            editor.replaceRange(val + '\n', {line: currentStartLine, ch: 0}, {line: currentEndLine, ch: 0});
         };
 
         textarea.addEventListener('input', () => {
@@ -371,18 +371,18 @@ export class CommentOverlay {
             apply();
             this.activePopup?.removeClass('is-editing');
             this.options.onAfterEdit();
-       /*     if (dismissAfter) {
-                state.suppressPopupUntilHover = true;
-                this.isHoveredPopup = false;
-                this.hidePopup();
-            } else {
-                const p = this.activePopup;
-                if (p) {
-                    p.removeClass('is-editing');
-                    p.dataset.contentHash = '';
-                    p.innerHTML = '';
-                }
-            }*/
+            /*     if (dismissAfter) {
+                     state.suppressPopupUntilHover = true;
+                     this.isHoveredPopup = false;
+                     this.hidePopup();
+                 } else {
+                     const p = this.activePopup;
+                     if (p) {
+                         p.removeClass('is-editing');
+                         p.dataset.contentHash = '';
+                         p.innerHTML = '';
+                     }
+                 }*/
         };
 
         const commitAndClose = () => exitEditMode(() => applyToEditor(textarea.value), true);
@@ -434,7 +434,7 @@ export class CommentOverlay {
         y = Math.max(MARGIN, y);
 
         popup.style.left = `${Math.round(x)}px`;
-        popup.style.top = `${layerRect.height - popup.innerHeight - 20}px`;
+        popup.style.top = `${layerRect.height - popup.clientHeight - 30}px`;
         popup.style.width = `${Math.round(POPUP_W)}px`;
         popup.style.maxHeight = `${Math.round(POPUP_H)}px`;
         popup.style.transform = 'none';
@@ -444,7 +444,7 @@ export class CommentOverlay {
 
     sync(svg: Element, index: Map<string, CommentSlotInfo>): void {
         const editingNodeId = this.options.getEditingNodeId();
-        const activeNodeIds = new Set<string>();
+        //const activeNodeIds = new Set<string>();
 
         const nodeElements = svg.querySelectorAll('.markmap-node');
 
@@ -454,21 +454,21 @@ export class CommentOverlay {
             if (!nodeId) continue;
 
             const slot = index.get(nodeId);
-            if (!slot?.text?.trim()) {
+            if (!slot) {
                 const state = this.nodeStates.get(nodeId);
                 if (state) {
-                    if (editingNodeId !== nodeId) {
-                        this.removeIcon(state);
-                        if (this.activeNodeId === nodeId) {
-                            this.hidePopup();
-                        }
-                        this.nodeStates.delete(nodeId);
+                    //if (editingNodeId !== nodeId) {  }
+                    this.removeIcon(state);
+                    if (this.activeNodeId === nodeId) {
+                        this.hidePopup();
                     }
+                    this.nodeStates.delete(nodeId);
+
                 }
                 continue;
             }
 
-            activeNodeIds.add(nodeId);
+            //activeNodeIds.add(nodeId);
 
             const foreign = nodeEl.querySelector('.markmap-foreign');
             if (!foreign) continue;
@@ -492,23 +492,23 @@ export class CommentOverlay {
                 state.foreign = foreign;
             }
 
-            if (editingNodeId === nodeId && this.options.isEditing()) {
-                continue;
-            }
+            /* if (editingNodeId === nodeId && this.options.isEditing()) {
+                 continue;
+             }*/
 
             state.slot = slot;
             this.attachIconIfNeeded(state);
         }
 
-        for (const [nodeId, state] of this.nodeStates) {
-            if (!activeNodeIds.has(nodeId) && editingNodeId !== nodeId) {
-                this.removeIcon(state);
-                if (this.activeNodeId === nodeId) {
-                    this.hidePopup();
-                }
-                this.nodeStates.delete(nodeId);
-            }
-        }
+        /* for (const [nodeId, state] of this.nodeStates) {
+             if (!activeNodeIds.has(nodeId) && editingNodeId !== nodeId) {
+                 this.removeIcon(state);
+                 if (this.activeNodeId === nodeId) {
+                     this.hidePopup();
+                 }
+                 this.nodeStates.delete(nodeId);
+             }
+         }*/
 
         let selectedState: NodeIconState | null = null;
         for (const state of this.nodeStates.values()) {

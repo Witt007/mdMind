@@ -445,10 +445,10 @@ export class MarkmapRenderer {
          }, { capture: true, passive: false }); */
 
         this.markmap.zoom.on('zoom.renderer', (evt) => {
-              if (evt.sourceEvent.type === 'wheel') {
+             /* if (evt.sourceEvent?.type === 'wheel') {
                   // 鼠标滚轮 → 缩放
 
-              }
+              }*/
             this.options.onZoom?.();
             this.zoomScale= evt.transform.k
 

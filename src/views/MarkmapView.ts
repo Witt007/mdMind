@@ -92,22 +92,25 @@ export class MarkmapView extends ItemView {
             this.renderer.destroy();
             this.renderer = null;
         }
-
         if (this.syncEngine) {
             this.syncEngine = null;
         }
 
-        if (this.commentOverlay) {
-            this.commentOverlay.destroy();
-            this.commentOverlay = null;
-        }
-
+        this.disposeComment();
+        this.commentOverlay = null;
         if (this.commentPopupLayer) {
             this.commentPopupLayer.remove();
             this.commentPopupLayer = null;
         }
+    }
 
-        this.commentRenderDebouncer.cancel();
+    disposeComment(): void {
+
+        if (this.commentOverlay) {
+            this.commentOverlay.destroy();
+           // this.commentOverlay = null;
+        }
+        //this.commentRenderDebouncer.cancel();
     }
 
     onResize(): void {
@@ -261,6 +264,8 @@ export class MarkmapView extends ItemView {
     private registerEventListeners(): void {
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', (_leaf) => {
+
+
                 const activeFile = this.app.workspace.getActiveFile();
                 if (activeFile !== this.file) {
                     this.resetStateOnFileChange();
@@ -487,6 +492,7 @@ export class MarkmapView extends ItemView {
  
              this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
+
             //this.selectedSvgNode&&this.renderer.adjustNodeWidthsOnZoom(this.selectedSvgNode);
             //this.renderComments();
             //this.handleCursorActivity(); //@TODO
@@ -578,7 +584,8 @@ export class MarkmapView extends ItemView {
 
                 this.updateNode_deboucer.executeDebounced(() => {
                     this.handleCursorActivity(undefined, (node) => {
-                        this.focusNodeInEditor(node, undefined, true)
+                        this.focusNodeInEditor(node, undefined, true);
+                        this.renderComments();
                     });
                     //this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
                 });
@@ -1356,7 +1363,7 @@ export class MarkmapView extends ItemView {
         const lines = mappingManager.getContentLines();
 
         if (!lines.length) {
-            this.commentOverlay.sync(svg, new Map());
+            //this.commentOverlay.sync(svg, new Map());
             return;
         }
 
