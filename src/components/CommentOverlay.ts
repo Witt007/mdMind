@@ -1,7 +1,7 @@
-import {App, Editor, ItemView, MarkdownRenderer, Notice} from 'obsidian';
-import {IPureNode} from 'markmap-common';
-import {CSS_CLASSES} from '../constants';
-import {CommentSlotInfo} from '../utils/commentSlot';
+import { App, Editor, ItemView, MarkdownRenderer, Notice } from 'obsidian';
+import { IPureNode } from 'markmap-common';
+import { CSS_CLASSES } from '../constants';
+import { CommentSlotInfo } from '../utils/commentSlot';
 
 const COMMENT_ICON_SVG = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M13 8H7"/><path d="M17 12H7"/></svg>`;
 const SAVE_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
@@ -222,7 +222,7 @@ export class CommentOverlay {
         this.activePopup.addEventListener('mousedown', (e) => e.stopPropagation());
         this.activePopup.addEventListener('wheel', (e) => {
             e.stopPropagation();
-        }, {passive: true});
+        }, { passive: true });
 
         this.activePopup.addEventListener('mouseenter', () => {
             this.isHoveredPopup = true;
@@ -353,7 +353,7 @@ export class CommentOverlay {
                     editor.replaceRange('', from, to);
                 } else {
                 }*/
-            editor.replaceRange(val + '\n', {line: currentStartLine, ch: 0}, {line: currentEndLine, ch: 0});
+            editor.replaceRange(val + '\n', { line: currentStartLine, ch: 0 }, { line: currentEndLine, ch: 0 });
         };
 
         textarea.addEventListener('input', () => {

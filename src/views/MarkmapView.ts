@@ -116,7 +116,7 @@ export class MarkmapView extends ItemView {
 
     onResize(): void {
         super.onResize();
-        //this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+        //this.selectedSvgNode&&this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNodethis.selectedSvgNode);
 
         //this.addHighlight();
         if (this.editorOverlay) {
@@ -493,9 +493,7 @@ export class MarkmapView extends ItemView {
  
              this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
-
-            //this.selectedSvgNode&&this.renderer.adjustNodeWidthsOnZoom(this.selectedSvgNode);
-            //this.renderComments();
+            this.renderComments();
             //this.handleCursorActivity(); //@TODO
             /*   // Restore highlight after re-render
                requestAnimationFrame(() => {
@@ -1190,9 +1188,7 @@ export class MarkmapView extends ItemView {
         if (this.selectedSvgNode) {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
-            this.renderComments();
-            // this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
-
+            //this.renderComments();
         }
     }
 

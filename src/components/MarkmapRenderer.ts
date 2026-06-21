@@ -450,8 +450,6 @@ export class MarkmapRenderer {
 
              }*/
             this.options.onZoom?.();
-            this.zoomScale = evt.transform.k
-
         });
     }
 
