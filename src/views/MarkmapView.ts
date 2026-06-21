@@ -98,6 +98,7 @@ export class MarkmapView extends ItemView {
 
         this.disposeComment();
         this.commentOverlay = null;
+
         if (this.commentPopupLayer) {
             this.commentPopupLayer.remove();
             this.commentPopupLayer = null;

@@ -427,14 +427,14 @@ export class CommentOverlay {
         const MARGIN = 16;
         const POPUP_W = 320;
         const POPUP_H = 220;
+        /*
+                let x = layerRect.width - POPUP_W - MARGIN;
+                let y = layerRect.height - POPUP_H - RGIN;
+                /*x = Math.max(MARGIN, x);
+               y = Math.max(MARGIN, y);
 
-        let x = layerRect.width - POPUP_W - MARGIN;
-        let y = layerRect.height - POPUP_H - MARGIN;
-        x = Math.max(MARGIN, x);
-        y = Math.max(MARGIN, y);
-
-        popup.style.left = `${Math.round(x)}px`;
-        popup.style.top = `${layerRect.height - popup.clientHeight - 30}px`;
+               /pup.style.left = `${Math.round(x)}px`;
+               popup.style.top = `${layerRect.height - popup.clientHeight - 30}px`;*/
         popup.style.width = `${Math.round(POPUP_W)}px`;
         popup.style.maxHeight = `${Math.round(POPUP_H)}px`;
         popup.style.transform = 'none';
