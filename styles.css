@@ -397,7 +397,7 @@
 }
 
 .theme-light .markmap-node-selected .markmap-foreign {
-    background: var(--markmap-selected-bg) !important;
+    background: rgb(3 19 61 / 25%) !important;
 }
 
 .theme-light .markmap-node-selected foreignObject {

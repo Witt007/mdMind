@@ -1,13 +1,13 @@
-import {Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf} from 'obsidian';
-import {IPureNode} from 'markmap-common';
-import {MarkmapRenderer, operationType} from '../components/MarkmapRenderer';
-import {SyncEngine} from '../components/SyncEngine';
-import {CommentOverlay} from '../components/CommentOverlay';
-import {MarkmapSettings} from '../types';
-import {CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP} from '../constants';
-import {Debouncer, throttle} from '../utils/debounce';
-import {buildCommentIndex, computeCommentSlot, CommentSlotInfo} from '../utils/commentSlot';
-import {generateNodeEditorStyles} from '../utils/theme';
+import { Editor, ItemView, MarkdownView, Menu, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { IPureNode } from 'markmap-common';
+import { MarkmapRenderer, operationType } from '../components/MarkmapRenderer';
+import { SyncEngine } from '../components/SyncEngine';
+import { CommentOverlay } from '../components/CommentOverlay';
+import { MarkmapSettings } from '../types';
+import { CSS_CLASSES, ERROR_MESSAGES, VIEW_TYPE_MARKMAP } from '../constants';
+import { Debouncer, throttle } from '../utils/debounce';
+import { buildCommentIndex, computeCommentSlot, CommentSlotInfo } from '../utils/commentSlot';
+import { generateNodeEditorStyles } from '../utils/theme';
 
 export interface MarkmapToolbar {
     container: HTMLElement;
@@ -109,14 +109,14 @@ export class MarkmapView extends ItemView {
 
         if (this.commentOverlay) {
             this.commentOverlay.destroy();
-           // this.commentOverlay = null;
+            // this.commentOverlay = null;
         }
         //this.commentRenderDebouncer.cancel();
     }
 
     onResize(): void {
         super.onResize();
-        this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+        //this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
 
         //this.addHighlight();
         if (this.editorOverlay) {
@@ -166,19 +166,19 @@ export class MarkmapView extends ItemView {
         this.toolbar = this.contentEl.createDiv(CSS_CLASSES.toolbar);
 
         const buttons = [
-            {icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn()},
-            {icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut()},
-            {icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit()},
-            {icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom()},
-            {icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll()},
-            {icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll()},
-            {icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile()},
+            { icon: 'zoom-in', tooltip: 'Zoom In', action: () => this.renderer?.zoomIn() },
+            { icon: 'zoom-out', tooltip: 'Zoom Out', action: () => this.renderer?.zoomOut() },
+            { icon: 'maximize', tooltip: 'Fit View', action: () => this.renderer?.fit() },
+            { icon: 'rotate-ccw', tooltip: 'Reset', action: () => this.renderer?.resetZoom() },
+            { icon: 'expand', tooltip: 'Expand All', action: () => this.expandAll() },
+            { icon: 'collapse-all', tooltip: 'Collapse All', action: () => this.collapseAll() },
+            { icon: 'refresh-cw', tooltip: 'Refresh', action: () => this.updateFromActiveFile() },
         ];
 
         for (const btn of buttons) {
             const button = this.toolbar.createEl('button', {
                 cls: CSS_CLASSES.toolbarButton,
-                attr: {'aria-label': btn.tooltip},
+                attr: { 'aria-label': btn.tooltip },
             });
             button.innerHTML = this.getIconSvg(btn.icon);
             button.addEventListener('click', btn.action);
@@ -302,7 +302,7 @@ export class MarkmapView extends ItemView {
             } else if (['ArrowRight', 'ArrowDown', 'ArrowUp', 'ArrowLeft'].includes(e.key)) {
                 void this.handleArrowKey(e);
             }
-        }, {capture: false});
+        }, { capture: false });
 
         /*      // Ctrl+Shift+Alt+C: capture on window so it works when the markdown editor (or another pane) has focus
              // but a markmap node is already selected in this view.
@@ -339,7 +339,7 @@ export class MarkmapView extends ItemView {
             if ((e.target as Element).closest('.cm-contentContainer'))
                 this.updateFromActiveFile();
 
-        }, {capture: true});
+        }, { capture: true });
 
 
     }
@@ -597,7 +597,7 @@ export class MarkmapView extends ItemView {
 
     private showMessage(text: string): void {
         if (!this.messageEl) {
-            this.messageEl = this.contentEl.createDiv({cls: CSS_CLASSES.error});
+            this.messageEl = this.contentEl.createDiv({ cls: CSS_CLASSES.error });
             this.messageEl.style.position = 'absolute';
             this.messageEl.style.inset = '0';
             this.messageEl.style.display = 'flex';
@@ -653,8 +653,8 @@ export class MarkmapView extends ItemView {
           }*/
         if (!editingOnMarkdown)
             editor.scrollIntoView({
-                from: {line: mapping.startLine, ch: 0},
-                to: {line: mapping.startLine, ch: 0}
+                from: { line: mapping.startLine, ch: 0 },
+                to: { line: mapping.startLine, ch: 0 }
             }, true)
 
         this.clearNodeSelection();
@@ -664,6 +664,12 @@ export class MarkmapView extends ItemView {
         this.addHighlight();
         this.app.workspace.getActiveViewOfType(MarkdownView) || this.markmapContainerEl?.focus(); //@TODO
         await this.focusMarkmapNode();
+
+        /*  this.selectedSvgNode&&this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+          this.selectedSvgNode?.addEventListener('transitionend', (e: TransitionEvent) => {
+              e.stopPropagation();
+              this.addHighlight();
+          },{once:true});*/
     }
 
 
@@ -1001,7 +1007,7 @@ export class MarkmapView extends ItemView {
             });
         });
 
-        menu.showAtPosition({x: event.clientX, y: event.clientY});
+        menu.showAtPosition({ x: event.clientX, y: event.clientY });
     }
 
     private handleNodeDragStart(node: IPureNode, event: DragEvent): void {
@@ -1185,7 +1191,7 @@ export class MarkmapView extends ItemView {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
             this.renderComments();
-           // this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
+            // this.renderer?.adjustNodeWidthsOnZoom(this.selectedSvgNode);
 
         }
     }
@@ -1309,7 +1315,7 @@ export class MarkmapView extends ItemView {
 
         if (fromLine >= mapping.endLine) {
             const titleCh = editor.getLine(mapping.startLine).length;
-            editor.replaceRange('\n', {line: mapping.startLine, ch: titleCh});
+            editor.replaceRange('\n', { line: mapping.startLine, ch: titleCh });
             slot = {
                 nodeId,
                 fromLine,
