@@ -21,7 +21,7 @@ export function computeCommentSlot(
     let toLine = mapping.endLine;
 
     let nextNodeLine = findNextNodeLine(toLine, lines.length - 1);
-    if (nextNodeLine == null) return null;
+    if (nextNodeLine == null) nextNodeLine = lines.length;
 
 
     const slice = lines.slice(toLine, nextNodeLine);

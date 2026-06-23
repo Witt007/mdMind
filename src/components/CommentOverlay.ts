@@ -456,12 +456,12 @@ export class CommentOverlay {
             const slot = index.get(nodeId);
             if (!slot) {
                 const state = this.nodeStates.get(nodeId);
-                if (state) {
+                if (state) { // make sure the irrelevant nodes and their states are cleaned up in time
                     //if (editingNodeId !== nodeId) {  }
                     this.removeIcon(state);
-                    if (this.activeNodeId === nodeId) {
-                        this.hidePopup();
-                    }
+                    /*  if (this.activeNodeId === nodeId) {
+                     } */
+                    this.hidePopup();
                     this.nodeStates.delete(nodeId);
 
                 }

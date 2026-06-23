@@ -4,7 +4,7 @@ node_modules/
 # Build outputs
 dist/
 main.js
-manifest.json
+
 
 # IDE folders
 .idea/

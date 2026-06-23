@@ -1,0 +1,10 @@
+{
+  "id": "mdmind-synchronization",
+  "name": "mdMind",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "We are excited to introduce mdMind, a Markdown-based mind mapping plugin designed for seamless, interactive note-taking and knowledge visualization,bidirectional synchronization between Markdown editor and Markmap mindmap view. ",
+  "author": "Witt",
+  "authorUrl": "https://github.com/Witt007",
+  "isDesktopOnly": false
+}

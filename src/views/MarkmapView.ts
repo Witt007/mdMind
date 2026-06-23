@@ -264,14 +264,17 @@ export class MarkmapView extends ItemView {
 
     private registerEventListeners(): void {
         this.registerEvent(
-            this.app.workspace.on('active-leaf-change', (_leaf) => {
-
+            this.app.workspace.on('active-leaf-change', (leaf) => {
+                if (leaf?.view?.getViewType() === VIEW_TYPE_MARKMAP) {
+                    return;
+                }
 
                 const activeFile = this.app.workspace.getActiveFile();
                 if (activeFile !== this.file) {
                     this.resetStateOnFileChange();
+                    this.commentOverlay?.destroy()
+                    this.updateFromActiveFile();
                 }
-                this.updateFromActiveFile();
             })
         );
 
@@ -476,7 +479,7 @@ export class MarkmapView extends ItemView {
         const mapping = this.syncEngine?.getMappingManager().findNearestNode(cursor.line);
 
         // Also, visually focus the node in the markmap viewport
-        const node = this.renderer?.getNodeByNodeId(mapping?.nodeId || 'mm-node-0');
+        const node = this.renderer?.getNodeByNodeId(mapping?.nodeId || this.syncEngine!.getMappingManager().getFirstNodeId());
         if (node) {
             callback(node);
         }
@@ -493,7 +496,7 @@ export class MarkmapView extends ItemView {
  
              this.hideMessage(); */
             await this.syncEngine.updateMappings(result.root, markdown);
-            this.renderComments();
+            console.log('Markmap updated from markdown at', new Date().toString());
             //this.handleCursorActivity(); //@TODO
             /*   // Restore highlight after re-render
                requestAnimationFrame(() => {
@@ -1188,7 +1191,7 @@ export class MarkmapView extends ItemView {
         if (this.selectedSvgNode) {
             this.selectedSvgNode.addClass(CSS_CLASSES.highlightedNode);
             this.selectedSvgNode.addClass(CSS_CLASSES.selectedNode);
-            //this.renderComments();
+            this.renderComments();
         }
     }
 
@@ -1206,7 +1209,7 @@ export class MarkmapView extends ItemView {
 
     private resetStateOnFileChange(): void {
         this.clearNodeSelection();
-        this.commentPopupLayer?.empty();
+        // this.commentPopupLayer?.empty();
         this.isEditingComment = false;
         this.editingCommentNodeId = null;
         this.lastCursorTrackTime = 0;
@@ -1357,25 +1360,27 @@ export class MarkmapView extends ItemView {
     }*/
 
     private renderComments(): void {
-        if (!this.renderer || !this.syncEngine || !this.commentOverlay) return;
+        throttle(() => {
+            if (!this.renderer || !this.syncEngine || !this.commentOverlay) return;
 
-        const svg = this.renderer.getSvg();
-        if (!svg) return;
+            const svg = this.renderer.getSvg();
+            if (!svg) return;
 
-        const mappingManager = this.syncEngine.getMappingManager();
-        const lines = mappingManager.getContentLines();
+            const mappingManager = this.syncEngine.getMappingManager();
+            const lines = mappingManager.getContentLines();
 
-        if (!lines.length) {
-            //this.commentOverlay.sync(svg, new Map());
-            return;
-        }
+            if (!lines.length) {
+                //this.commentOverlay.sync(svg, new Map());
+                return;
+            }
 
-        const index = buildCommentIndex(
-            mappingManager.getAllMappings(),
-            lines,
-            (from, to) => mappingManager.findNextNodeLine(from, to)
-        );
+            const index = buildCommentIndex(
+                mappingManager.getAllMappings(),
+                lines,
+                (from, to) => mappingManager.findNextNodeLine(from, to)
+            );
 
-        this.commentOverlay.sync(svg, index);
+            this.commentOverlay.sync(svg, index);
+        }, 600)();
     }
 }

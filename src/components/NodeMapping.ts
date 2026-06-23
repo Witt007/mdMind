@@ -7,7 +7,7 @@ export class NodeMappingManager {
     private lineMap: LineNodeMap = {};
     private contentLines: string[] = [];
 
-    getLenOfContentLines(): number{return this.contentLines.length}
+    getLenOfContentLines(): number { return this.contentLines.length }
 
 
     buildMappings(root: IPureNode, markdown: string): void {
@@ -15,13 +15,14 @@ export class NodeMappingManager {
         this.lineMap = {};
         this.contentLines = markdown.split('\n');
 
-        if (root.content === '') {
-            if (root.children) {
-                for (const child of root.children) {
-                    this.processNode(child, 1, undefined);
-                }
-            }
-        } else this.processNode(root, 0, undefined);
+        /*  if (root.content === '') {
+             if (root.children) {
+                 for (const child of root.children) {
+                     this.processNode(child, 1, undefined);
+                 }
+             }
+         } else  */
+        this.processNode(root, 0, undefined);
     }
 
     public extractTextContent(content: string): string {
@@ -46,6 +47,10 @@ export class NodeMappingManager {
 
     getAllMappings(): NodeMappingInfo[] {
         return Array.from(this.mappings.values());
+    }
+
+    getFirstNodeId(): string {
+        return this.mappings.keys().next().value || 'mm-node-0'
     }
 
     updateContent(markdown: string): void {
@@ -94,12 +99,19 @@ export class NodeMappingManager {
 
     // the purpose is just mapping the node to the line, so we can find the node by line number when we click on the line, and find the line number by node when we click on the node;
     private processNode(node: IPureNode, depth: number, parentId?: string): void {
+        const nodeId = (node.payload as any)?.nodeId //|| generateNodeId(startLine, node.content);
         const lines = (node.payload?.lines as string)?.split(',').map(Number);
-        if (!lines) return console.warn('startLine or endLine is not defined', node);
+        if (!lines) {
+            if (node.children) {
+                for (const child of node.children) {
+                    this.processNode(child, depth + 1, nodeId);
+                }
+            }
+            return console.warn('startLine or endLine is not defined', node);
+        }
         let [startLine, endLine] = lines;
         if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) return console.warn('startLine or endLine is not defined', node);
 
-        const nodeId = (node.payload as any)?.nodeId || generateNodeId(startLine, node.content);
 
         const info: NodeMappingInfo = {
             nodeId,

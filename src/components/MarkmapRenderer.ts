@@ -125,6 +125,7 @@ export class MarkmapRenderer {
                 if (!foreignObj) return;
 
                 const execution = () => {
+                    console.log('transition end execution called at ', new Date().toString());
                     self.debouncer.executeDebounced(() => {
                         self.ontransitionend();
                         self.selectedSvgNode = null;
