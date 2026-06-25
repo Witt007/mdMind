@@ -58,7 +58,6 @@ export class SyncEngine {
             }
 
             const content = editor.getValue();
-            const nodes = parseMarkdownStructure(content);
 
             this.mappingManager.updateContent(content);
 

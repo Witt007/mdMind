@@ -79,7 +79,7 @@ export default class MarkmapSyncPlugin extends Plugin {
     }
 
     onunload(): void {
-        this.app.workspace.detachLeavesOfType(VIEW_TYPE_MARKMAP);
+        // this.app.workspace.detachLeavesOfType(VIEW_TYPE_MARKMAP);
     }
 
     async loadSettings(): Promise<void> {

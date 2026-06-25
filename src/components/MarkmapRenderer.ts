@@ -344,8 +344,10 @@ export class MarkmapRenderer {
     private init(): void {
         this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         this.svg.classList.add(CSS_CLASSES.markmapSvg);
-        this.svg.style.width = '100%';
-        this.svg.style.height = '100%';
+        this.svg.setCssStyles({
+            width: '100%',
+            height: '100%'
+        });
         this.svg.setAttribute('tabindex', '0');
         this.container.appendChild(this.svg);
 
@@ -406,7 +408,9 @@ export class MarkmapRenderer {
               nodeRect.bottom > containerRect.top &&
               nodeRect.top < containerRect.bottom;*/
 
-        contentDiv.style.setProperty('width', 'max-content', 'important');
+        contentDiv.setCssStyles({
+            width: 'max-content'
+        });
 
         if (containerRect.width >= nodeRect.width) return;
 
@@ -416,7 +420,9 @@ export class MarkmapRenderer {
         /* const textLen=Number(contentDiv.getCssPropertyValue('font-size').replace('px',''))*(contentDiv.textContent?.length||0)
          const availableWidthInCss = Math.min(containerRect.width/1.4,Math.max(nodeRect.width,textLen))
  */
-        contentDiv.style.setProperty('width', (containerRect.width / 2) + 'px', 'important');
+        contentDiv.setCssStyles({
+            width: (containerRect.width / 2) + 'px'
+        });
         //  contentDiv.style.setProperty('max-width', `${availableWidthInCss}px`, 'important');
 
     }

@@ -13,8 +13,7 @@ export class MarkmapSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-
-        containerEl.createEl('h2', { text: 'Markmap Sync Settings' });
+        new Setting(containerEl).setName('Sync').setHeading()
 
         this.addStartupSetting(containerEl);
         this.addSyncModeSetting(containerEl);
@@ -28,7 +27,7 @@ export class MarkmapSettingTab extends PluginSettingTab {
     private addStartupSetting(containerEl: HTMLElement): void {
         new Setting(containerEl)
             .setName('Open on startup')
-            .setDesc('Automatically open the Markmap sidebar when Obsidian starts')
+            .setDesc('Automatically open the mdMind sidebar when Obsidian starts')
             .addToggle((toggle: ToggleComponent) => {
                 toggle
                     .setValue(this.plugin.settings.openOnStartup)
@@ -123,7 +122,7 @@ export class MarkmapSettingTab extends PluginSettingTab {
     }
 
     private addInteractionSettings(containerEl: HTMLElement): void {
-        containerEl.createEl('h3', { text: 'Interaction' });
+        new Setting(containerEl).setName('Interaction').setHeading()
 
         new Setting(containerEl)
             .setName('Enable drag and drop')
@@ -163,7 +162,7 @@ export class MarkmapSettingTab extends PluginSettingTab {
     }
 
     private addAppearanceSettings(containerEl: HTMLElement): void {
-        containerEl.createEl('h3', { text: 'Appearance' });
+        new Setting(containerEl).setName('Appearance').setHeading()
 
         new Setting(containerEl)
             .setName('Show toolbar')
@@ -191,7 +190,7 @@ export class MarkmapSettingTab extends PluginSettingTab {
                     });
             });
 
-        new Setting(containerEl)
+        /*new Setting(containerEl)
             .setName('Max node width')
             .setDesc('Maximum width of mindmap nodes in pixels (100-2000)')
             .addSlider((slider: SliderComponent) => {
@@ -203,6 +202,6 @@ export class MarkmapSettingTab extends PluginSettingTab {
                         this.plugin.settings.maxWidth = value;
                         await this.plugin.saveSettings();
                     });
-            });
+            });*/
     }
 }

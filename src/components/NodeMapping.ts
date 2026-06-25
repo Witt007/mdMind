@@ -26,9 +26,13 @@ export class NodeMappingManager {
     }
 
     public extractTextContent(content: string): string {
-        const temp = document.createElement('div');
-        temp.innerHTML = content;
-        return temp.textContent || temp.innerText || content;
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(content, 'text/html');
+            return doc.body.textContent || doc.body.innerText || content;
+        } catch (e) {
+            return content;
+        }
     }
 
     getMappingById(nodeId: string): NodeMappingInfo | undefined {
