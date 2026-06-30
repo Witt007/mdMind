@@ -53,9 +53,9 @@ interface NodeIconState {
     container: HTMLElement | null;
     iconSpan: HTMLElement | null;
     slot: CommentSlotInfo | null;
-    isHoveredIcon: boolean;
+   // isHoveredIcon: boolean;
     isEditing: boolean;
-    suppressPopupUntilHover: boolean;
+    //suppressPopupUntilHover: boolean;
     hideTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -91,16 +91,17 @@ export class CommentOverlay {
         state.container.appendChild(state.iconSpan);
         state.foreign.appendChild(state.container);
 
-        state.iconSpan.addEventListener('mouseenter', () => {
-            state.suppressPopupUntilHover = false;
-            state.isHoveredIcon = true;
+        state.iconSpan.addEventListener('click', (evt   ) => {
+          //  state.suppressPopupUntilHover = false;
+            //state.isHoveredIcon = true;
+            evt.stopPropagation();
             this.clearActiveHideTimer();
             this.showPopupForNode(state);
         });
-        state.iconSpan.addEventListener('mouseleave', () => {
-            state.isHoveredIcon = false;
+     /*   state.iconSpan.addEventListener('mouseleave', () => {
+            //state.isHoveredIcon = false;
             this.delayHidePopup(state);
-        });
+        });*/
     }
 
     private removeIcon(state: NodeIconState): void {
@@ -150,11 +151,11 @@ export class CommentOverlay {
     private delayHidePopup(state: NodeIconState): void {
         this.clearActiveHideTimer();
 
-        if (!state.isEditing && !state.isHoveredIcon && !this.isHoveredPopup && !this.isNodeSelected(state)) {
+        if (!state.isEditing && !this.isHoveredPopup && !this.isNodeSelected(state)) {
             if (this.activePopup) {
                 this.activePopup.removeClass('is-active');
                 this.activeHideTimer = setTimeout(() => {
-                    if (!state.isEditing && !state.isHoveredIcon && !this.isHoveredPopup && !this.isNodeSelected(state)) {
+                    if (!state.isEditing &&  !this.isHoveredPopup && !this.isNodeSelected(state)) {
                         this.hidePopup();
                         // If a node is selected, show its popup after hiding the hovered one
                         for (const s of this.nodeStates.values()) {
@@ -166,7 +167,7 @@ export class CommentOverlay {
                     }
                 }, 220);
             }
-        } else if (!state.isEditing && !state.isHoveredIcon && !this.isHoveredPopup && this.isNodeSelected(state)) {
+        } else if (!state.isEditing  && !this.isHoveredPopup && this.isNodeSelected(state)) {
             // Node is still selected — keep it
             this.clearActiveHideTimer();
         }
@@ -248,7 +249,7 @@ export class CommentOverlay {
             e.stopPropagation();
         }, { passive: true });
 
-        this.activePopup.addEventListener('mouseenter', () => {
+       /* this.activePopup.addEventListener('mouseenter', () => {
             this.isHoveredPopup = true;
             this.clearActiveHideTimer();
             this.activePopup?.addClass('is-active');
@@ -259,7 +260,7 @@ export class CommentOverlay {
             if (state) {
                 this.delayHidePopup(state);
             }
-        });
+        });*/
 
         this.options.popupLayer.appendChild(this.activePopup);
         return this.activePopup;
@@ -508,9 +509,9 @@ export class CommentOverlay {
                     container: null,
                     iconSpan: null,
                     slot: null,
-                    isHoveredIcon: false,
+                    //isHoveredIcon: false,
                     isEditing: false,
-                    suppressPopupUntilHover: false,
+                   // suppressPopupUntilHover: false,
                     hideTimer: null,
                 };
                 this.nodeStates.set(nodeId, state);
@@ -547,7 +548,7 @@ export class CommentOverlay {
 
         if (this.activePopup && this.activeNodeId) {
             const activeState = this.nodeStates.get(this.activeNodeId);
-            const isHoveringActive = activeState?.isHoveredIcon || this.isHoveredPopup;
+            const isHoveringActive = this.isHoveredPopup;
 
             if (!activeState || !activeState.slot?.text?.trim()) {
                 if (!activeState?.isEditing) {
@@ -583,9 +584,9 @@ export class CommentOverlay {
                 container: null,
                 iconSpan: null,
                 slot: null,
-                isHoveredIcon: false,
+                //isHoveredIcon: false,
                 isEditing: false,
-                suppressPopupUntilHover: false,
+                //suppressPopupUntilHover: false,
                 hideTimer: null,
             };
             this.nodeStates.set(nodeId, state);
